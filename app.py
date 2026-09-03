@@ -174,7 +174,6 @@ with main_tab:
     st.markdown("---")
     st.markdown("### 📝 Log a Play to the Group Ledger")
     
-    # Map label descriptions directly to the underlying object structures
     options_pool = {}
     if game_lines_slate:
         for p in game_lines_slate:
@@ -209,7 +208,7 @@ with main_tab:
     else:
         st.caption("No edge profiles available to compile log slips.")
 
-# --- TAB 2: SCOREBOARD DISPLAY ---
+# --- TAB 2: SCOREBOARD DISPLAY (FIXED INDENTATION) ---
 with ledger_tab:
     st.markdown("### 📈 Live Ledger & Status Management Matrix")
     if not st.session_state.ledger.empty:
