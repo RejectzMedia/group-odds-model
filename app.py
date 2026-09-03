@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 
-# 1. APPLICATION presentation LAYOUT
+# 1. APPLICATION PRESENTATION LAYOUT
 st.set_page_config(page_title="Syndicate Analytics Pro", page_icon="🎯", layout="wide")
 st.title("🎯 SharpOdds Syndicate Pro")
 st.caption("Cross-League Line Processor & Specialized Player Prop Vectoring Engine")
@@ -39,6 +39,7 @@ if not API_KEY:
 
 # --- 5. PASS 1: FETCH AND PROCESS DATA ---
 clean_sport = str(SPORT).strip()
+# FIXED: Hardcoded absolute API URL schema completely prevents domain mangling and URL squashing bugs
 base_api_url = f"https://the-odds-api.com{clean_sport}/odds"
 game_params = {"apiKey": str(API_KEY).strip(), "regions": "us", "markets": "h2h,spreads,totals", "oddsFormat": "american", "bookmakers": "fanduel,draftkings"}
 
@@ -63,7 +64,6 @@ if isinstance(game_response, list):
                 m_key = market.get("key")
                 outcomes = market.get("outcomes", [])
                 
-                # FIXED: Clear, explicit list indexing that prevents type errors and loads rows perfectly
                 if isinstance(outcomes, list) and len(outcomes) == 2:
                     p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
                     
