@@ -208,5 +208,5 @@ with main_tab:
     with col_order:
         sort_order = st.selectbox("Order Direction", ["Highest to Lowest", "Lowest to Highest"])
     with col_market:
-        selected_markets = st.multiselect(
-            "Select Game Line Markets to View", 
+        selected_markets = st.multiselect
+            "Select Game Line Markets to View"
