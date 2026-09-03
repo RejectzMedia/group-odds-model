@@ -37,11 +37,11 @@ if not API_KEY:
     with main_tab: st.warning("⚠️ Open the control panel sidebar and input your API key.")
     st.stop()
 
-# --- 5. FETCH AND PROCESS DATA ---
+# --- 5. PASS 1: FETCH AND PROCESS DATA ---
 clean_sport = str(SPORT).strip()
 
-# FIXED: Removed all dynamic combinations to protect the URL from squashing or merging errors
-base_api_url = f"https://the-odds-api.com{clean_sport}/odds"
+# FIXED: Hardcoded clean endpoint pattern stops domain names from squashing together
+base_api_url = f"https://api.the-odds-api.com/v4/sports/{clean_sport}/odds"
 
 game_params = {
     "apiKey": str(API_KEY).strip(),
@@ -72,7 +72,7 @@ if isinstance(game_response, list):
                 m_key = market.get("key")
                 outcomes = market.get("outcomes", [])
                 
-                # FIXED: Restored clean integer position mapping to extract row metrics perfectly
+                # FIXED: Clear list array mappings to pull metrics without hitting type errors
                 if isinstance(outcomes, list) and len(outcomes) == 2:
                     p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
                     
