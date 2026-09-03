@@ -31,11 +31,20 @@ def calculate_kelly_unit(true_prob, american_odds, bankroll, fraction):
     wager = bankroll * kelly_fraction * fraction
     return max(0.0, wager), max(0.0, wager / (bankroll * 0.01))
 
-# 4. LIVE DATA HARVESTER
+# 4. LIVE DATA HARVESTER (Separated variables to prevent host blending)
 if API_KEY:
     try:
-        url = f"https://the-odds-api.com{SPORT}/odds"
-        params = {"apiKey": API_KEY, "regions": "us", "markets": "h2h", "oddsFormat": "american", "bookmakers": "fanduel"}
+        # Base url endpoint separated distinctly from sport query
+        url = f"https://api.the-odds-api.com/v4/sports/{SPORT}/odds"
+        
+        params = {
+            "apiKey": API_KEY, 
+            "regions": "us", 
+            "markets": "h2h", 
+            "oddsFormat": "american", 
+            "bookmakers": "fanduel"
+        }
+        
         response = requests.get(url, params=params).json()
         
         if isinstance(response, dict) and "msg" in response:
@@ -53,6 +62,7 @@ if API_KEY:
                         if mk.get("key") == "h2h":
                             outcomes = mk.get("outcomes", [])
                             if len(outcomes) != 2: continue
+                            
                             p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
                             
                             for opt, true_p in zip(outcomes, [p1_true, p2_true]):
