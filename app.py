@@ -69,7 +69,6 @@ if not API_KEY:
     st.stop()
 
 # --- 7. PASS 1: FETCH BASE BULK GAME ML, SPREADS, AND TOTALS ---
-# FIX: Clean strings using .strip() to remove hidden whitespaces
 clean_sport = str(SPORT).strip()
 base_api_url = f"https://api.the-odds-api.com/v4/sports/{clean_sport}/odds"
 
@@ -108,8 +107,9 @@ for game in game_response:
             m_key = market.get("key")
             outcomes = market.get("outcomes", [])
             
-            if len(outcomes) == 2:
-                p1_true, p2_true = devig_odds(outcomes["price"], outcomes["price"])
+            # FIX: Ensure we have exactly a 2-way market pair and use integer indices
+            if isinstance(outcomes, list) and len(outcomes) == 2:
+                p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
                 
                 for opt, true_p in zip(outcomes, [p1_true, p2_true]):
                     mult = 1.06 if m_key == "h2h" else 1.05
@@ -169,7 +169,8 @@ for game in game_response:
                             for p_name, group in df_p.groupby(name_col):
                                 if len(group) == 2:
                                     rows = group.to_dict(orient="records")
-                                    p1_t, p2_t = devig_odds(rows["price"], rows["price"])
+                                    # FIX: Used integer indices rows[0] and rows[1] for player props
+                                    p1_t, p2_t = devig_odds(rows[0]["price"], rows[1]["price"])
                                     
                                     for opt, true_p in zip(rows, [p1_t, p2_t]):
                                         proj_p = min(0.99, true_p * 1.07) 
@@ -214,6 +215,3 @@ with main_tab:
     if game_lines_slate:
         df_games = pd.DataFrame(game_lines_slate)
         df_filtered_games = df_games[df_games["Market"].isin(selected_markets)]
-        
-        if not df_filtered_games.empty:
-            df_final_games = df_filtered_games.sort_values(by=sort_metric, ascending=ascending_flag)
