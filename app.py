@@ -37,7 +37,6 @@ SPORT = st.sidebar.selectbox("Target League Workspace", [
 BANKROLL = st.sidebar.number_input("Syndicate Bankroll ($)", value=1000.0, step=100.0)
 KELLY_CRITERIA = st.sidebar.slider("Kelly Fraction (Risk Allocation)", 0.1, 1.0, 0.25)
 
-# ADDED: View mode toggle to assist with line stream debugging
 VIEW_MODE = st.sidebar.radio("Display Filter Matrix", ["Show +EV Edges Only", "Show Raw Board (Debug Stream)"])
 
 # 5. CORE MATHEMATICAL CALCULATION ENGINES
@@ -80,7 +79,7 @@ game_params = {
     "regions": "us",
     "markets": "h2h,spreads,totals",
     "oddsFormat": "american",
-    "bookmakers": "fanduel"
+    "bookmakers": "fanduel,draftkings"  # UPGRADED: Added DraftKings lookup support
 }
 
 try:
@@ -103,9 +102,11 @@ for game in game_response:
     bookmakers = game.get("bookmakers", [])
     
     for bm in bookmakers:
-        if bm.get("key") != "fanduel": continue
-        markets = bm.get("markets", [])
+        # UPGRADED: Accept either FanDuel or DraftKings lines dynamically
+        bm_key = bm.get("key")
+        if bm_key not in ["fanduel", "draftkings"]: continue
         
+        markets = bm.get("markets", [])
         for market in markets:
             m_key = market.get("key")
             outcomes = market.get("outcomes", [])
@@ -121,7 +122,6 @@ for game in game_response:
                     ev = (proj_p * dec_odds) - (1 - proj_p)
                     wager, units = calculate_kelly_unit(proj_p, opt["price"], BANKROLL, KELLY_CRITERIA)
                     
-                    # CHANGED: Respect the view mode filter selection block
                     if VIEW_MODE == "Show Raw Board (Debug Stream)" or ev > 0:
                         pt_suffix = f" ({opt['point']})" if "point" in opt else ""
                         if m_key == "h2h":
@@ -132,6 +132,7 @@ for game in game_response:
                             market_label = "Over/Under"
                             
                         game_lines_slate.append({
+                            "Bookmaker": bm_key.upper(),
                             "Matchup": matchup_name,
                             "Market": market_label,
                             "Selection": f"{opt['name']}{pt_suffix}",
@@ -153,14 +154,16 @@ for game in game_response:
             "regions": "us",
             "markets": props_to_fetch,
             "oddsFormat": "american",
-            "bookmakers": "fanduel"
+            "bookmakers": "fanduel,draftkings"
         }
         
         try:
             prop_response = requests.get(event_prop_url, params=prop_params, timeout=10).json()
             if isinstance(prop_response, dict) and "bookmakers" in prop_response:
                 for p_bm in prop_response.get("bookmakers", []):
-                    if p_bm.get("key") != "fanduel": continue
+                    p_bm_key = p_bm.get("key")
+                    if p_bm_key not in ["fanduel", "draftkings"]: continue
+                    
                     for p_market in p_bm.get("markets", []):
                         m_key = p_market.get("key")
                         p_outcomes = p_market.get("outcomes", [])
@@ -180,11 +183,11 @@ for game in game_response:
                                         ev = (proj_p * dec_odds) - (1 - proj_p)
                                         wager, units = calculate_kelly_unit(proj_p, opt["price"], BANKROLL, KELLY_CRITERIA)
                                         
-                                        # CHANGED: Respect the view mode filter selection block
                                         if VIEW_MODE == "Show Raw Board (Debug Stream)" or ev > 0:
                                             market_clean = m_key.replace("player_", "").replace("pitcher_", "").replace("_", " ").title()
                                             pt_val = f" {opt.get('point', '')}" if 'point' in opt else ""
                                             player_props_slate.append({
+                                                "Bookmaker": p_bm_key.upper(),
                                                 "Matchup": matchup_name,
                                                 "Selection": f"{p_name} [{market_clean}]: {opt['name']}{pt_val}",
                                                 "Odds": opt["price"], "True Prob.": proj_p, "EV Edge": ev,
@@ -207,6 +210,3 @@ with main_tab:
     with col_market:
         selected_markets = st.multiselect(
             "Select Game Line Markets to View", 
-            ["Moneyline", "Spread", "Over/Under"], 
-            default=["Moneyline", "Spread", "Over/Under"]
-        )
