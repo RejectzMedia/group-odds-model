@@ -3,19 +3,33 @@ import pandas as pd
 import numpy as np
 import requests
 
-# 1. PAGE CONFIG
-st.set_page_config(page_title="Syndicate Model", layout="wide")
-st.title("🎯 SharpOdds Syndicate Model")
-st.subheader("Automated FanDuel Line Engine")
+# 1. EMPOWERED PAGE SETUP
+st.set_page_config(page_title="Syndicate Analytics", page_icon="🎯", layout="wide")
+st.markdown("""
+    <style>
+    .main .block-container {padding-top: 2rem; padding-bottom: 2rem;}
+    h1 {color: #1E3A8A; font-weight: 800;}
+    .stTabs [data-baseweb="tab"] {font-size: 16px; font-weight: bold;}
+    </style>
+""", unsafe_allow_html=True)
 
-# 2. SIDEBAR CONFIG (Tap the > arrow in the top left on your phone to open!)
-st.sidebar.markdown("### 🎛️ Model Settings")
-API_KEY = st.sidebar.text_input("Enter Odds API Key", type="password")
-SPORT = st.sidebar.selectbox("Select League", ["mlb", "americanfootball_ncaaf", "americanfootball_nfl"])
-BANKROLL = st.sidebar.number_input("Total Group Bankroll ($)", value=1000.0, step=100.0)
-KELLY_CRITERIA = st.sidebar.slider("Kelly Fraction (Risk)", 0.1, 1.0, 0.25)
+st.title("🎯 SharpOdds Syndicate")
+st.caption("Automated Line Processing, +EV Engine & Live Profit/Loss Ledger")
 
-# 3. MATH ENGINE
+# 2. SESSION STATE LEDGER MEMORY (Free temporary storage)
+if "ledger" not in st.session_state:
+    st.session_state.ledger = pd.DataFrame(columns=[
+        "Friend", "Matchup", "Selection", "Odds", "Wager ($)", "True Win Prob.", "EV Edge", "Status"
+    ])
+
+# 3. SIDEBAR CONFIG (Tap the > arrow in the top left on your phone to open!)
+st.sidebar.markdown("### 🎛️ Control Panel")
+API_KEY = st.sidebar.text_input("Odds API Key", type="password")
+SPORT = st.sidebar.selectbox("Active League", ["mlb", "americanfootball_ncaaf", "americanfootball_nfl"])
+BANKROLL = st.sidebar.number_input("Group Bankroll ($)", value=1000.0, step=100.0)
+KELLY_CRITERIA = st.sidebar.slider("Kelly Fraction (Risk Filter)", 0.1, 1.0, 0.25)
+
+# 4. MATH ENGINE FUNCTIONS
 def devig_odds(american_over, american_under):
     implied_o = 100 / (american_over + 100) if american_over > 0 else abs(american_over) / (abs(american_over) + 100)
     implied_u = 100 / (american_under + 100) if american_under > 0 else abs(american_under) / (abs(american_under) + 100)
@@ -31,20 +45,13 @@ def calculate_kelly_unit(true_prob, american_odds, bankroll, fraction):
     wager = bankroll * kelly_fraction * fraction
     return max(0.0, wager), max(0.0, wager / (bankroll * 0.01))
 
-# 4. LIVE DATA HARVESTER (Separated variables to prevent host blending)
+# 5. LIVE DATA INTERACTION TABS
+tab1, tab2 = st.tabs(["🔥 Live Value Tracker", "📊 Syndicate Ledger"])
+
 if API_KEY:
     try:
-        # Base url endpoint separated distinctly from sport query
-        url = f"https://api.the-odds-api.com/v4/sports/{SPORT}/odds"
-        
-        params = {
-            "apiKey": API_KEY, 
-            "regions": "us", 
-            "markets": "h2h", 
-            "oddsFormat": "american", 
-            "bookmakers": "fanduel"
-        }
-        
+        url = f"https://the-odds-api.com{SPORT}/odds"
+        params = {"apiKey": API_KEY, "regions": "us", "markets": "h2h", "oddsFormat": "american", "bookmakers": "fanduel"}
         response = requests.get(url, params=params).json()
         
         if isinstance(response, dict) and "msg" in response:
@@ -74,27 +81,83 @@ if API_KEY:
                                 if ev > 0:
                                     processed_slate.append({
                                         "Matchup": f"{game.get('away_team')} @ {game.get('home_team')}",
-                                        "Bet": opt["name"],
+                                        "Bet Selection": opt["name"],
                                         "Odds": opt["price"],
-                                        "True Prob.": f"{model_projection*100:.1f}%",
+                                        "True Win Prob.": f"{model_projection*100:.1f}%",
+                                        "True Prob Float": model_projection,
                                         "EV Edge": f"{ev*100:+.1f}%",
-                                        "Wager": f"${wager:.2f}",
+                                        "EV Float": ev,
+                                        "Suggested Wager": f"${wager:.2f}",
+                                        "Wager Float": wager,
                                         "Units": f"{units:.2f}u"
                                     })
-        if processed_slate:
-            st.markdown("### 📊 Today's Live Value Grid")
-            st.dataframe(pd.DataFrame(processed_slate))
+        
+        # --- TAB 1: LIVE DATA TRACKER ---
+        with tab1:
+            if processed_slate:
+                df = pd.DataFrame(processed_slate)
+                
+                # Clean up UI display columns
+                display_df = df[["Matchup", "Bet Selection", "Odds", "True Win Prob.", "EV Edge", "Suggested Wager", "Units"]]
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
+                
+                # Interactive Logging Block
+                st.markdown("---")
+                st.markdown("### 📝 Log an Active Bet Slip")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    friend = st.selectbox("Who is betting?", ["Myself", "Friend A", "Friend B", "Friend C"])
+                with col2:
+                    selected_match = st.selectbox("Select Target Play", df["Matchup"].unique())
+                    match_row = df[df["Matchup"] == selected_match].iloc[0]
+                with col3:
+                    amt = st.number_input("Actual Amount Bet ($)", min_value=1.0, value=20.0, step=5.0)
+                
+                if st.button("🚀 Commit Play to Syndicate Ledger"):
+                    # Build fresh entry row dictionary
+                    new_entry = {
+                        "Friend": friend,
+                        "Matchup": selected_match,
+                        "Selection": match_row["Bet Selection"],
+                        "Odds": match_row["Odds"],
+                        "Wager ($)": amt,
+                        "True Win Prob.": match_row["True Win Prob."],
+                        "EV Edge": match_row["EV Edge"],
+                        "Status": "Pending"
+                    }
+                    st.session_state.ledger = pd.concat([st.session_state.ledger, pd.DataFrame([new_entry])], ignore_index=True)
+                    st.success(f"Successfully logged ${amt:.2f} on {match_row['Bet Selection']} under {friend}'s profile!")
+            else:
+                st.info("🔎 Analyzing... No high-value mathematical gaps found in active lines. Try switching leagues in the control panel.")
+
+        # --- TAB 2: SYNDICATE LEDGER & SCOREBOARD ---
+        with tab2:
+            st.markdown("### 📈 Live Profit & Loss Scoreboard")
             
-            st.markdown("---")
-            st.markdown("### 📝 Log a Bet Slip")
-            col1, col2, col3 = st.columns(3)
-            with col1: friend = st.selectbox("Who is betting?", ["Myself", "Friend A", "Friend B"])
-            with col2: bet_target = st.selectbox("Target Play", [p["Matchup"] for p in processed_slate])
-            with col3: amt = st.number_input("Amount ($)", min_value=1.0, value=20.0)
-            if st.button("Lock Bet"): st.success(f"Tracked ${amt:.2f} for {friend}!")
-        else:
-            st.info("No value gaps found in active lines. Try another league.")
+            if not st.session_state.ledger.empty:
+                # Helper logic to calculate prospective payouts
+                def calculate_payout(row):
+                    odds = row["Odds"]
+                    wager = row["Wager ($)"]
+                    if odds > 0:
+                        return wager * (odds / 100)
+                    else:
+                        return wager * (100 / abs(odds))
+
+                # Display the full interactive table logs
+                st.dataframe(st.session_state.ledger, use_container_width=True, hide_index=True)
+                
+                # Clear ledger control
+                if st.button("⚠️ Clear Entire History Log"):
+                    st.session_state.ledger = pd.DataFrame(columns=[
+                        "Friend", "Matchup", "Selection", "Odds", "Wager ($)", "True Win Prob.", "EV Edge", "Status"
+                    ])
+                    st.rerun()
+            else:
+                st.info("No plays have been committed yet. Go to the Live Value Tracker tab to log your first slip.")
+
     except Exception as e:
-        st.error(f"Data stream error: {e}")
+        st.error(f"Dashboard visualization glitch: {e}")
 else:
-    st.warning("⚠️ Open the sidebar (top-left arrow) and input your Odds API Key.")
+    with tab1: st.warning("⚠️ Open the control panel (top-left menu arrow) and input your key to harvest active fields.")
+    with tab2: st.warning("⚠️ Waiting for active configuration credentials.")
