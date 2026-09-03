@@ -69,7 +69,7 @@ if not API_KEY:
     st.stop()
 
 # --- 7. PASS 1: FETCH BASE BULK GAME ML, SPREADS, AND TOTALS ---
-base_api_url = f"https://api.the-odds-api.com/v4/sports/{SPORT}/odds"
+base_api_url = f"https://the-odds-api.com{SPORT}/odds"
 game_params = {
     "apiKey": API_KEY,
     "regions": "us",
@@ -123,7 +123,7 @@ for game in game_response:
                         elif m_key == "spreads":
                             market_label = "Spread"
                         else:
-                            market_label = "Total"
+                            market_label = "Over/Under"
                             
                         game_lines_slate.append({
                             "Matchup": matchup_name,
@@ -139,7 +139,7 @@ for game in game_response:
     # --- PASS 2: INDEPENDENT PROPS DEEP LOOK (ONLY FOR MLB & NFL) ---
     if SPORT in ["baseball_mlb", "americanfootball_nfl"] and game_id:
         props_to_fetch = "pitcher_strikeouts,pitcher_record_an_out,batter_hits,batter_runs,batter_rbis" if SPORT == "baseball_mlb" else "player_pass_yds,player_rush_yds,player_rec_yds"
-        event_prop_url = f"https://api.the-odds-api.com/v4/sports/{SPORT}/events/{game_id}/odds"
+        event_prop_url = f"https://the-odds-api.com{SPORT}/events/{game_id}/odds"
         prop_params = {
             "apiKey": API_KEY,
             "regions": "us",
@@ -189,25 +189,30 @@ for game in game_response:
 # --- TAB 1: DISPLAY MATRICES ---
 with main_tab:
     st.markdown("### 🛠️ Interactive Sorting Filter Canvas")
-    col_sort, col_order = st.columns(2)
+    
+    # UPGRADED: Added a dedicated row for filtering out specific market types
+    col_sort, col_order, col_market = st.columns([1, 1, 2])
     
     with col_sort:
         sort_metric = st.selectbox("Sort Data Metric By", ["EV Edge", "True Prob.", "Odds", "Wager"])
     with col_order:
         sort_order = st.selectbox("Order Direction", ["Highest to Lowest", "Lowest to Highest"])
+    with col_market:
+        selected_markets = st.multiselect(
+            "Select Game Line Markets to View", 
+            ["Moneyline", "Spread", "Over/Under"], 
+            default=["Moneyline", "Spread", "Over/Under"]
+        )
     
     ascending_flag = True if sort_order == "Lowest to Highest" else False
 
     # Game Lines Canvas
-    st.markdown("#### 🏛️ Game Line Value Fields (Moneylines, Spreads & Totals)")
+    st.markdown("#### 🏛️ Game Line Value Fields")
     if game_lines_slate:
-        df_games = pd.DataFrame(game_lines_slate).sort_values(by=sort_metric, ascending=ascending_flag)
-        st.dataframe(df_games.style.format({"True Prob.": "{:.2%}", "EV Edge": "{:.2%}", "Wager": "${:.2f}", "Units": "{:.2f}"}), use_container_width=True)
-    else:
-        st.info("No +EV game line markets found for this slate.")
-
-    # Player Props Canvas
-    st.markdown("#### 🎯 Player Prop Value Fields")
-    if player_props_slate:
-        df_props = pd.DataFrame(player_props_slate).sort_values(by=sort_metric, ascending=ascending_flag)
-        st.dataframe(df_props.style.format({"True Prob.": "{:.2%}", "EV Edge": "{:.2%}", "Wager": "${:.2f}", "Units": "{:.2f}"}), use_container_width=True)
+        df_games = pd.DataFrame(game_lines_slate)
+        
+        # UPGRADED: Dynamically filter down the rows based on the user's multi-select choices
+        df_filtered_games = df_games[df_games["Market"].isin(selected_markets)]
+        
+        if not df_filtered_games.empty:
+            df_final_games = df_filtered_games.sort_values(by=sort_metric, ascending=ascending_flag)
