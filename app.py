@@ -205,3 +205,4 @@ with main_tab:
     board_game, board_prop = st.columns(2)
     
     with board_game:
+
