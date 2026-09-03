@@ -52,6 +52,18 @@ def calculate_kelly_unit(true_prob, american_odds, bankroll, fraction):
         return 0.0, 0.0
     wager = bankroll * kelly_fraction * fraction
     return max(0.0, wager), max(0.0, wager / (bankroll * 0.01))
+    def extract_player_name(df):
+    """
+    Scans the dataframe columns for known player identity keys.
+    Returns the column name string if found, otherwise returns None.
+    """
+    # Priority list of keys used by various sports endpoints
+    possible_keys = ["description", "player", "name", "participant"]
+    
+    for key in possible_keys:
+        if key in df.columns:
+            return key
+    return None
 
 # 6. APP NAVIGATION FRAME
 main_tab, ledger_tab = st.tabs(["🔥 Active Value Boards", "📊 Group Ledger Matrix"])
