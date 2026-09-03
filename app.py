@@ -34,7 +34,7 @@ def calculate_kelly_unit(true_prob, american_odds, bankroll, fraction):
 # 4. LIVE DATA HARVESTER
 if API_KEY:
     try:
-        url = f"https://the-odds-api.com{SPORT}/odds/"
+        url = f"https://the-odds-api.com{SPORT}/odds"
         params = {"apiKey": API_KEY, "regions": "us", "markets": "h2h", "oddsFormat": "american", "bookmakers": "fanduel"}
         response = requests.get(url, params=params).json()
         
