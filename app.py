@@ -72,14 +72,14 @@ if not API_KEY:
 
 # --- 7. PASS 1: FETCH BASE BULK GAME ML, SPREADS, AND TOTALS ---
 clean_sport = str(SPORT).strip()
-base_api_url = f"https://api.the-odds-api.com/v4/sports/{clean_sport}/odds"
+base_api_url = f"https://the-odds-api.com{clean_sport}/odds"
 
 game_params = {
     "apiKey": str(API_KEY).strip(),
     "regions": "us",
     "markets": "h2h,spreads,totals",
     "oddsFormat": "american",
-    "bookmakers": "fanduel,draftkings"  # UPGRADED: Added DraftKings lookup support
+    "bookmakers": "fanduel,draftkings"
 }
 
 try:
@@ -102,7 +102,6 @@ for game in game_response:
     bookmakers = game.get("bookmakers", [])
     
     for bm in bookmakers:
-        # UPGRADED: Accept either FanDuel or DraftKings lines dynamically
         bm_key = bm.get("key")
         if bm_key not in ["fanduel", "draftkings"]: continue
         
@@ -147,7 +146,7 @@ for game in game_response:
     if SPORT in ["baseball_mlb", "americanfootball_nfl"] and game_id:
         props_to_fetch = "pitcher_strikeouts,pitcher_record_an_out,batter_hits,batter_runs,batter_rbis" if SPORT == "baseball_mlb" else "player_pass_yds,player_rush_yds,player_rec_yds"
         clean_id = str(game_id).strip()
-        event_prop_url = f"https://api.the-odds-api.com/v4/sports/{clean_sport}/events/{clean_id}/odds"
+        event_prop_url = f"https://the-odds-api.com{clean_sport}/events/{clean_id}/odds"
         
         prop_params = {
             "apiKey": str(API_KEY).strip(),
@@ -208,5 +207,7 @@ with main_tab:
     with col_order:
         sort_order = st.selectbox("Order Direction", ["Highest to Lowest", "Lowest to Highest"])
     with col_market:
-        selected_markets = st.multiselect
-            "Select Game Line Markets to View"
+        selected_markets = st.multiselect(
+            "Select Game Line Markets to View", 
+            ["Moneyline", "Spread", "Over/Under"], 
+            default=["Moneyline", "Spread", "Over/Under"]
