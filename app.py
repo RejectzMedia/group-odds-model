@@ -69,11 +69,11 @@ if not API_KEY:
     st.stop()
 
 # --- 7. PASS 1: FETCH BASE BULK GAME ML, SPREADS, AND TOTALS ---
-base_api_url = f"https://the-odds-api.com{SPORT}/odds"
+base_api_url = f"https://api.the-odds-api.com/v4/sports/{SPORT}/odds"
 game_params = {
     "apiKey": API_KEY,
     "regions": "us",
-    "markets": "h2h,spreads,totals",  # UPGRADED: Pulls spreads and over/under lines natively
+    "markets": "h2h,spreads,totals",
     "oddsFormat": "american",
     "bookmakers": "fanduel"
 }
@@ -91,7 +91,6 @@ if isinstance(game_response, dict) and "msg" in game_response:
 game_lines_slate = []
 player_props_slate = []
 
-# Process Game Moneylines, Spreads, and Totals
 for game in game_response:
     if not isinstance(game, dict): continue
     matchup_name = f"{game.get('away_team')} @ {game.get('home_team')}"
@@ -110,7 +109,6 @@ for game in game_response:
                 p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
                 
                 for opt, true_p in zip(outcomes, [p1_true, p2_true]):
-                    # Set targeted structural adjustments per market type
                     mult = 1.06 if m_key == "h2h" else 1.05
                     proj_p = min(0.99, true_p * mult)
                     
@@ -119,14 +117,13 @@ for game in game_response:
                     wager, units = calculate_kelly_unit(proj_p, opt["price"], BANKROLL, KELLY_CRITERIA)
                     
                     if ev > 0:
-                        # Clean label tagging for multi-market identification
                         pt_suffix = f" ({opt['point']})" if "point" in opt else ""
                         if m_key == "h2h":
                             market_label = "Moneyline"
                         elif m_key == "spreads":
-                            market_label = f"Spread"
+                            market_label = "Spread"
                         else:
-                            market_label = f"Total"
+                            market_label = "Total"
                             
                         game_lines_slate.append({
                             "Matchup": matchup_name,
@@ -142,7 +139,7 @@ for game in game_response:
     # --- PASS 2: INDEPENDENT PROPS DEEP LOOK (ONLY FOR MLB & NFL) ---
     if SPORT in ["baseball_mlb", "americanfootball_nfl"] and game_id:
         props_to_fetch = "pitcher_strikeouts,pitcher_record_an_out,batter_hits,batter_runs,batter_rbis" if SPORT == "baseball_mlb" else "player_pass_yds,player_rush_yds,player_rec_yds"
-        event_prop_url = f"https://the-odds-api.com{SPORT}/events/{game_id}/odds"
+        event_prop_url = f"https://api.the-odds-api.com/v4/sports/{SPORT}/events/{game_id}/odds"
         prop_params = {
             "apiKey": API_KEY,
             "regions": "us",
@@ -212,3 +209,5 @@ with main_tab:
     # Player Props Canvas
     st.markdown("#### 🎯 Player Prop Value Fields")
     if player_props_slate:
+        df_props = pd.DataFrame(player_props_slate).sort_values(by=sort_metric, ascending=ascending_flag)
+        st.dataframe(df_props.style.format({"True Prob.": "{:.2%}", "EV Edge": "{:.2%}", "Wager": "${:.2f}", "Units": "{:.2f}"}), use_container_width=True)
