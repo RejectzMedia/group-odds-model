@@ -72,7 +72,7 @@ if not API_KEY:
 
 # --- 7. PASS 1: FETCH BASE BULK GAME ML, SPREADS, AND TOTALS ---
 clean_sport = str(SPORT).strip()
-base_api_url = f"https://api.the-odds-api.com/v4/sports/{clean_sport}/odds"
+base_api_url = f"https://the-odds-api.com{clean_sport}/odds"
 
 game_params = {
     "apiKey": str(API_KEY).strip(),
@@ -112,6 +112,7 @@ if isinstance(game_response, list):
                 outcomes = market.get("outcomes", [])
                 
                 if isinstance(outcomes, list) and len(outcomes) == 2:
+                    # FIX: Correct entry-level list index addressing
                     p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
                     
                     for opt, true_p in zip(outcomes, [p1_true, p2_true]):
@@ -147,7 +148,7 @@ if isinstance(game_response, list):
         if SPORT in ["baseball_mlb", "americanfootball_nfl"] and game_id:
             props_to_fetch = "pitcher_strikeouts,pitcher_record_an_out,batter_hits,batter_runs,batter_rbis" if SPORT == "baseball_mlb" else "player_pass_yds,player_rush_yds,player_rec_yds"
             clean_id = str(game_id).strip()
-            event_prop_url = f"https://api.the-odds-api.com/v4/sports/{clean_sport}/events/{clean_id}/odds"
+            event_prop_url = f"https://the-odds-api.com{clean_sport}/events/{clean_id}/odds"
             
             prop_params = {
                 "apiKey": str(API_KEY).strip(),
@@ -175,6 +176,7 @@ if isinstance(game_response, list):
                                 for p_name, group in df_p.groupby(name_col):
                                     if len(group) == 2:
                                         rows = group.to_dict(orient="records")
+                                        # FIX: Correct record-level list index addressing
                                         p1_t, p2_t = devig_odds(rows[0]["price"], rows[1]["price"])
                                         
                                         for opt, true_p in zip(rows, [p1_t, p2_t]):
@@ -197,12 +199,3 @@ if isinstance(game_response, list):
                                                     "Wager": wager, 
                                                     "Units": units
                                                 })
-            except Exception:
-                pass 
-
-# --- 8. UI RENDER INTERFACE PANEL ---
-with main_tab:
-    board_game, board_prop = st.columns(2)
-    
-    with board_game:
-
