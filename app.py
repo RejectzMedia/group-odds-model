@@ -74,7 +74,6 @@ if not API_KEY:
 
 # --- 7. PASS 1: FETCH BASE BULK GAME ML, SPREADS, AND TOTALS ---
 clean_sport = str(SPORT).strip()
-# FIXED: Absolute URL structuring to protect the path routing format string
 base_api_url = f"https://api.the-odds-api.com/v4/sports/{clean_sport}/odds/"
 
 game_params = {
@@ -152,7 +151,6 @@ if isinstance(game_response, list):
         if SPORT in ["baseball_mlb", "americanfootball_nfl"] and game_id:
             props_to_fetch = "pitcher_strikeouts,pitcher_record_an_out,batter_hits,batter_runs,batter_rbis" if SPORT == "baseball_mlb" else "player_pass_yds,player_rush_yds,player_rec_yds"
             clean_id = str(game_id).strip()
-            # FIXED: Absolute URL structuring for the nested props endpoint path routing string
             event_prop_url = f"https://api.the-odds-api.com/v4/sports/{clean_sport}/events/{clean_id}/odds/"
             
             prop_params = {
@@ -202,3 +200,8 @@ if isinstance(game_response, list):
                                                     "True Prob.": proj_p, 
                                                     "EV Edge": ev,
                                                     "Wager": wager, 
+                                                    "Units": units
+                                                })
+            except Exception:
+                pass 
+
