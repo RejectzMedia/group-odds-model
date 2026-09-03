@@ -39,7 +39,9 @@ if not API_KEY:
 
 # --- 5. PASS 1: FETCH AND PROCESS DATA ---
 clean_sport = str(SPORT).strip()
-base_api_url = f"https://the-odds-api.com{clean_sport}/odds"
+
+# FIXED: Re-inserted the vital '/v4/sports/' routing branch to align correctly with API standards
+base_api_url = f"https://api.the-odds-api.com/v4/sports/{clean_sport}/odds"
 
 game_params = {
     "apiKey": str(API_KEY).strip(),
@@ -98,7 +100,6 @@ with main_tab:
     if game_lines_slate:
         df = pd.DataFrame(game_lines_slate).sort_values(by="EV Edge", ascending=False)
         
-        # FIXED: Enforced a column configuration framework to clean decimal points globally while preserving standard column sorting headers
         st.dataframe(
             df,
             column_config={
