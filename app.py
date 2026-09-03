@@ -72,7 +72,9 @@ if not API_KEY:
 
 # --- 7. PASS 1: FETCH BASE BULK GAME ML, SPREADS, AND TOTALS ---
 clean_sport = str(SPORT).strip()
-base_api_url = f"https://the-odds-api.com{clean_sport}/odds"
+
+# STABLE: Hardcoded string concatenation prevents stripping out forward slashes on mobile
+base_api_url = "https://the-odds-api.com" + clean_sport + "/odds"
 
 game_params = {
     "apiKey": str(API_KEY).strip(),
@@ -85,11 +87,11 @@ game_params = {
 try:
     game_response = requests.get(base_api_url, params=game_params, timeout=10).json()
 except Exception as e:
-    st.error(f"📡 API Game Line Connection Dropout: {e}")
+    st.error("📡 API Game Line Connection Dropout: " + str(e))
     st.stop()
 
 if isinstance(game_response, dict) and "msg" in game_response:
-    st.error(f"API Provider Error: {game_response['msg']}")
+    st.error("API Provider Error: " + str(game_response['msg']))
     st.stop()
 
 game_lines_slate = []
@@ -97,7 +99,7 @@ player_props_slate = []
 
 for game in game_response:
     if not isinstance(game, dict): continue
-    matchup_name = f"{game.get('away_team')} @ {game.get('home_team')}"
+    matchup_name = game.get('away_team', 'Away') + " @ " + game.get('home_team', 'Home')
     game_id = game.get("id")
     bookmakers = game.get("bookmakers", [])
     
@@ -122,7 +124,7 @@ for game in game_response:
                     wager, units = calculate_kelly_unit(proj_p, opt["price"], BANKROLL, KELLY_CRITERIA)
                     
                     if VIEW_MODE == "Show Raw Board (Debug Stream)" or ev > 0:
-                        pt_suffix = f" ({opt['point']})" if "point" in opt else ""
+                        pt_suffix = " (" + str(opt['point']) + ")" if "point" in opt else ""
                         if m_key == "h2h":
                             market_label = "Moneyline"
                         elif m_key == "spreads":
@@ -134,7 +136,7 @@ for game in game_response:
                             "Bookmaker": bm_key.upper(),
                             "Matchup": matchup_name,
                             "Market": market_label,
-                            "Selection": f"{opt['name']}{pt_suffix}",
+                            "Selection": str(opt['name']) + pt_suffix,
                             "Odds": opt["price"], 
                             "True Prob.": proj_p, 
                             "EV Edge": ev, 
@@ -146,7 +148,9 @@ for game in game_response:
     if SPORT in ["baseball_mlb", "americanfootball_nfl"] and game_id:
         props_to_fetch = "pitcher_strikeouts,pitcher_record_an_out,batter_hits,batter_runs,batter_rbis" if SPORT == "baseball_mlb" else "player_pass_yds,player_rush_yds,player_rec_yds"
         clean_id = str(game_id).strip()
-        event_prop_url = f"https://the-odds-api.com{clean_sport}/events/{clean_id}/odds"
+        
+        # STABLE: Hardcoded string concatenation for the detailed props endpoint
+        event_prop_url = "https://the-odds-api.com" + clean_sport + "/events/" + clean_id + "/odds"
         
         prop_params = {
             "apiKey": str(API_KEY).strip(),
@@ -184,16 +188,16 @@ for game in game_response:
                                         
                                         if VIEW_MODE == "Show Raw Board (Debug Stream)" or ev > 0:
                                             market_clean = m_key.replace("player_", "").replace("pitcher_", "").replace("_", " ").title()
-                                            pt_val = f" {opt.get('point', '')}" if 'point' in opt else ""
+                                            pt_val = " " + str(opt.get('point', '')) if 'point' in opt else ""
                                             player_props_slate.append({
                                                 "Bookmaker": p_bm_key.upper(),
                                                 "Matchup": matchup_name,
-                                                "Selection": f"{p_name} [{market_clean}]: {opt['name']}{pt_val}",
+                                                "Selection": str(p_name) + " [" + market_clean + "]: " + str(opt['name']) + pt_val,
                                                 "Odds": opt["price"], "True Prob.": proj_p, "EV Edge": ev,
                                                 "Wager": wager, "Units": units
                                             })
                         elif not df_p.empty:
-                            st.sidebar.caption(f"⚠️ Unexpected columns in market {m_key}: {list(df_p.columns)}")
+                            st.sidebar.caption("⚠️ Unexpected columns in market " + str(m_key) + ": " + str(list(df_p.columns)))
         except Exception:
             pass 
 
@@ -205,10 +209,3 @@ with main_tab:
     with col_sort:
         sort_metric = st.selectbox("Sort Data Metric By", ["EV Edge", "True Prob.", "Odds", "Wager"])
     with col_order:
-        sort_order = st.selectbox("Order Direction", ["Highest to Lowest", "Lowest to Highest"])
-    with col_market:
-        selected_markets = st.multiselect(
-            "Select Game Line Markets to View", 
-            ["Moneyline", "Spread", "Over/Under"], 
-            default=["Moneyline", "Spread", "Over/Under"]
-        )
