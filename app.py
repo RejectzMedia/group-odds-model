@@ -207,9 +207,6 @@ with main_tab:
     else:
         st.caption("No edge profiles available to compile log slips.")
 
-# --- TAB 2: SCOREBOARD DISPLAY (FLATTENED NO-NEST LOGIC) ---
-with ledger_tab:
-    st.markdown("### 📈 Live Ledger & Status Management Matrix")
-    
-    # If the database has records, display them cleanly
-    if len(st.session_state.ledger) > 0:
+# --- TAB 2: SCOREBOARD DISPLAY (FLATTENED TO PREVENT CODESPACE FORMAT CRASHES) ---
+# We use standard container assignments to attach variables without any indent requirements.
+ledger_container = ledger_tab.container()
