@@ -211,3 +211,4 @@ with main_tab:
             "Select Game Line Markets to View", 
             ["Moneyline", "Spread", "Over/Under"], 
             default=["Moneyline", "Spread", "Over/Under"]
+        )
