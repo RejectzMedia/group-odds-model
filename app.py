@@ -212,4 +212,4 @@ with main_tab:
 # --- TAB 2: SCOREBOARD DISPLAY ---
 with ledger_tab:
     st.markdown("### 📈 Live Ledger & Status Management Matrix")
-    if not st.session_state.ledger.empty:
+if not st.session_state.ledger.empty:
