@@ -69,9 +69,12 @@ if not API_KEY:
     st.stop()
 
 # --- 7. PASS 1: FETCH BASE BULK GAME ML, SPREADS, AND TOTALS ---
-base_api_url = "https://the-odds-api.com" + str(SPORT) + "/odds"
+# FIX: Clean strings using .strip() to remove hidden whitespaces
+clean_sport = str(SPORT).strip()
+base_api_url = f"https://api.the-odds-api.com/v4/sports/{clean_sport}/odds"
+
 game_params = {
-    "apiKey": API_KEY,
+    "apiKey": str(API_KEY).strip(),
     "regions": "us",
     "markets": "h2h,spreads,totals",
     "oddsFormat": "american",
@@ -106,7 +109,7 @@ for game in game_response:
             outcomes = market.get("outcomes", [])
             
             if len(outcomes) == 2:
-                p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
+                p1_true, p2_true = devig_odds(outcomes["price"], outcomes["price"])
                 
                 for opt, true_p in zip(outcomes, [p1_true, p2_true]):
                     mult = 1.06 if m_key == "h2h" else 1.05
@@ -139,9 +142,11 @@ for game in game_response:
     # --- PASS 2: INDEPENDENT PROPS DEEP LOOK (ONLY FOR MLB & NFL) ---
     if SPORT in ["baseball_mlb", "americanfootball_nfl"] and game_id:
         props_to_fetch = "pitcher_strikeouts,pitcher_record_an_out,batter_hits,batter_runs,batter_rbis" if SPORT == "baseball_mlb" else "player_pass_yds,player_rush_yds,player_rec_yds"
-        event_prop_url = "https://the-odds-api.com" + str(SPORT) + "/events/" + str(game_id) + "/odds"
+        clean_id = str(game_id).strip()
+        event_prop_url = f"https://api.the-odds-api.com/v4/sports/{clean_sport}/events/{clean_id}/odds"
+        
         prop_params = {
-            "apiKey": API_KEY,
+            "apiKey": str(API_KEY).strip(),
             "regions": "us",
             "markets": props_to_fetch,
             "oddsFormat": "american",
@@ -164,7 +169,7 @@ for game in game_response:
                             for p_name, group in df_p.groupby(name_col):
                                 if len(group) == 2:
                                     rows = group.to_dict(orient="records")
-                                    p1_t, p2_t = devig_odds(rows[0]["price"], rows[1]["price"])
+                                    p1_t, p2_t = devig_odds(rows["price"], rows["price"])
                                     
                                     for opt, true_p in zip(rows, [p1_t, p2_t]):
                                         proj_p = min(0.99, true_p * 1.07) 
