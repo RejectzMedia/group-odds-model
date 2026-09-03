@@ -37,6 +37,9 @@ SPORT = st.sidebar.selectbox("Target League Workspace", [
 BANKROLL = st.sidebar.number_input("Syndicate Bankroll ($)", value=1000.0, step=100.0)
 KELLY_CRITERIA = st.sidebar.slider("Kelly Fraction (Risk Allocation)", 0.1, 1.0, 0.25)
 
+# ADDED: View mode toggle to assist with line stream debugging
+VIEW_MODE = st.sidebar.radio("Display Filter Matrix", ["Show +EV Edges Only", "Show Raw Board (Debug Stream)"])
+
 # 5. CORE MATHEMATICAL CALCULATION ENGINES
 def devig_odds(american_over, american_under):
     implied_o = 100 / (american_over + 100) if american_over > 0 else abs(american_over) / (abs(american_over) + 100)
@@ -107,7 +110,6 @@ for game in game_response:
             m_key = market.get("key")
             outcomes = market.get("outcomes", [])
             
-            # FIX: Ensure we have exactly a 2-way market pair and use integer indices
             if isinstance(outcomes, list) and len(outcomes) == 2:
                 p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
                 
@@ -119,7 +121,8 @@ for game in game_response:
                     ev = (proj_p * dec_odds) - (1 - proj_p)
                     wager, units = calculate_kelly_unit(proj_p, opt["price"], BANKROLL, KELLY_CRITERIA)
                     
-                    if ev > 0:
+                    # CHANGED: Respect the view mode filter selection block
+                    if VIEW_MODE == "Show Raw Board (Debug Stream)" or ev > 0:
                         pt_suffix = f" ({opt['point']})" if "point" in opt else ""
                         if m_key == "h2h":
                             market_label = "Moneyline"
@@ -169,7 +172,6 @@ for game in game_response:
                             for p_name, group in df_p.groupby(name_col):
                                 if len(group) == 2:
                                     rows = group.to_dict(orient="records")
-                                    # FIX: Used integer indices rows[0] and rows[1] for player props
                                     p1_t, p2_t = devig_odds(rows[0]["price"], rows[1]["price"])
                                     
                                     for opt, true_p in zip(rows, [p1_t, p2_t]):
@@ -178,7 +180,8 @@ for game in game_response:
                                         ev = (proj_p * dec_odds) - (1 - proj_p)
                                         wager, units = calculate_kelly_unit(proj_p, opt["price"], BANKROLL, KELLY_CRITERIA)
                                         
-                                        if ev > 0:
+                                        # CHANGED: Respect the view mode filter selection block
+                                        if VIEW_MODE == "Show Raw Board (Debug Stream)" or ev > 0:
                                             market_clean = m_key.replace("player_", "").replace("pitcher_", "").replace("_", " ").title()
                                             pt_val = f" {opt.get('point', '')}" if 'point' in opt else ""
                                             player_props_slate.append({
@@ -207,11 +210,3 @@ with main_tab:
             ["Moneyline", "Spread", "Over/Under"], 
             default=["Moneyline", "Spread", "Over/Under"]
         )
-    
-    ascending_flag = True if sort_order == "Lowest to Highest" else False
-
-    # Game Lines Canvas
-    st.markdown("#### 🏛️ Game Line Value Fields")
-    if game_lines_slate:
-        df_games = pd.DataFrame(game_lines_slate)
-        df_filtered_games = df_games[df_games["Market"].isin(selected_markets)]
