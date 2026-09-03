@@ -66,13 +66,15 @@ def extract_player_name(df):
 main_tab, ledger_tab = st.tabs(["🔥 Active Value Boards", "📊 Group Ledger Matrix"])
 
 if not API_KEY:
-    with main_tab: st.warning("⚠️ Open the control panel (top-left menu arrow) and input your key to harvest active fields.")
-    with ledger_tab: st.warning("⚠️ Waiting for validation framework configuration parameters.")
+    with main_tab:
+        st.warning("⚠️ Open the control panel (top-left menu arrow) and input your key to harvest active fields.")
+    with ledger_tab:
+        st.warning("⚠️ Waiting for validation framework configuration parameters.")
     st.stop()
 
 # --- 7. PASS 1: FETCH BASE BULK GAME ML, SPREADS, AND TOTALS ---
 clean_sport = str(SPORT).strip()
-base_api_url = f"https://api.the-odds-api.com/v4/sports/{clean_sport}/odds"
+base_api_url = f"https://the-odds-api.com{clean_sport}/odds"
 
 game_params = {
     "apiKey": str(API_KEY).strip(),
@@ -97,14 +99,16 @@ player_props_slate = []
 
 if isinstance(game_response, list):
     for game in game_response:
-        if not isinstance(game, dict): continue
+        if not isinstance(game, dict):
+            continue
         matchup_name = game.get('away_team', 'Away') + " @ " + game.get('home_team', 'Home')
         game_id = game.get("id")
         bookmakers = game.get("bookmakers", [])
         
         for bm in bookmakers:
             bm_key = bm.get("key")
-            if bm_key not in ["fanduel", "draftkings"]: continue
+            if bm_key not in ["fanduel", "draftkings"]:
+                continue
             
             markets = bm.get("markets", [])
             for market in markets:
@@ -147,7 +151,7 @@ if isinstance(game_response, list):
         if SPORT in ["baseball_mlb", "americanfootball_nfl"] and game_id:
             props_to_fetch = "pitcher_strikeouts,pitcher_record_an_out,batter_hits,batter_runs,batter_rbis" if SPORT == "baseball_mlb" else "player_pass_yds,player_rush_yds,player_rec_yds"
             clean_id = str(game_id).strip()
-            event_prop_url = f"https://api.the-odds-api.com/v4/sports/{clean_sport}/events/{clean_id}/odds"
+            event_prop_url = f"https://the-odds-api.com{clean_sport}/events/{clean_id}/odds"
             
             prop_params = {
                 "apiKey": str(API_KEY).strip(),
@@ -162,7 +166,8 @@ if isinstance(game_response, list):
                 if isinstance(prop_response, dict) and "bookmakers" in prop_response:
                     for p_bm in prop_response.get("bookmakers", []):
                         p_bm_key = p_bm.get("key")
-                        if p_bm_key not in ["fanduel", "draftkings"]: continue
+                        if p_bm_key not in ["fanduel", "draftkings"]:
+                            continue
                         
                         for p_market in p_bm.get("markets", []):
                             m_key = p_market.get("key")
@@ -200,8 +205,3 @@ if isinstance(game_response, list):
             except Exception:
                 pass 
 
-# --- 8. UI RENDER INTERFACE PANEL ---
-with main_tab:
-    board_game, board_prop = st.columns(2)
-    
-    with board_game:
