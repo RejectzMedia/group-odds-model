@@ -64,7 +64,7 @@ if SPORT == "baseball_mlb":
 elif SPORT == "americanfootball_nfl":
     markets_to_pull += ",player_pass_tds,player_anytime_td"
 
-base_api_url = f"https://the-odds-api.com{SPORT}/odds/"
+base_api_url = f"https://api.the-odds-api.com/v4/sports/{SPORT}/odds/"
 params = {
     "apiKey": API_KEY,
     "regions": "us",
@@ -73,13 +73,27 @@ params = {
     "bookmakers": "fanduel"
 }
 
-response = requests.get(base_api_url, params=params).json()
+# --- 8. LIVE DATA HARVESTER WITH EMBEDDED SAFETIES ---
+response = []
+try:
+    # Forces a 10-second request timeout limit to prevent infinite network hanging
+    res = requests.get(base_api_url, params=params, timeout=10)
+    response = res.json()
+except requests.exceptions.Timeout:
+    st.error("⏳ The sportsbook server took too long to respond. Please refresh the app to try again.")
+    st.stop()
+except requests.exceptions.ConnectionError:
+    st.error("📡 Network connection interrupted while streaming lines. The API server might be temporarily down or rate-limiting traffic.")
+    st.stop()
+except Exception as e:
+    st.error(f"⚠️ Unhandled Network Exception: {e}")
+    st.stop()
 
 if isinstance(response, dict) and "msg" in response:
     st.error(f"API Provider Error: {response['msg']}")
     st.stop()
 
-# 8. ANALYTICAL CONVERSION MATRICES
+# 9. ANALYTICAL CONVERSION MATRICES
 game_lines_slate = []
 player_props_slate = []
 
@@ -172,7 +186,6 @@ with main_tab:
     st.markdown("---")
     st.markdown("### 📝 Log a Play to the Group Ledger")
     
-    # Map label descriptions directly to the underlying object structures
     options_pool = {}
     if game_lines_slate:
         for p in game_lines_slate:
@@ -202,11 +215,3 @@ with main_tab:
                 "EV Edge": f"{match_meta['EV Edge']*100:+.1f}%", 
                 "Status": "Pending"
             }
-            st.session_state.ledger = pd.concat([st.session_state.ledger, pd.DataFrame([new_log])], ignore_index=True)
-            st.success(f"Tracked ${actual_wager:.2f} on {match_meta['Selection']} into your group ledger!")
-    else:
-        st.caption("No edge profiles available to compile log slips.")
-
-# --- TAB 2: SCOREBOARD DISPLAY (FLATTENED TO PREVENT CODESPACE FORMAT CRASHES) ---
-# We use standard container assignments to attach variables without any indent requirements.
-ledger_container = ledger_tab.container()
