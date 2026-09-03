@@ -69,7 +69,7 @@ if not API_KEY:
     st.stop()
 
 # --- 7. PASS 1: FETCH BASE BULK GAME ML LINES ---
-base_api_url = f"https://the-odds-api.com{SPORT}/odds/"
+base_api_url = f"https://the-odds-api.com{SPORT}/odds"
 game_params = {
     "apiKey": API_KEY,
     "regions": "us",
@@ -77,7 +77,6 @@ game_params = {
     "oddsFormat": "american",
     "bookmakers": "fanduel"
 }
-
 try:
     game_response = requests.get(base_api_url, params=game_params, timeout=10).json()
 except Exception as e:
