@@ -99,7 +99,7 @@ for game in response:
             
             # Moneyline/Game Line Engine
             if m_key == "h2h" and len(outcomes) == 2:
-                p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
+                p1_true, p2_true = devig_odds(outcomes["price"], outcomes["price"])
                 for opt, true_p in zip(outcomes, [p1_true, p2_true]):
                     proj_p = min(0.99, true_p * 1.06) 
                     dec_odds = opt["price"] / 100 if opt["price"] > 0 else 100 / abs(opt["price"])
@@ -212,4 +212,4 @@ with main_tab:
 # --- TAB 2: SCOREBOARD DISPLAY ---
 with ledger_tab:
     st.markdown("### 📈 Live Ledger & Status Management Matrix")
-if not st.session_state.ledger.empty:
+    if not st.session_state.ledger.empty:
