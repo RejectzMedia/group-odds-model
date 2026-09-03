@@ -162,39 +162,34 @@ for game in game_response:
 with main_tab:
     st.markdown("### 🛠️ Interactive Sorting Filter Canvas")
     col_sort, col_order = st.columns(2)
-    sort_metric = st.selectbox("Sort Data Metric By", ["Expected Value (EV)", "True Win Probability", "Matchup Alphabetical"])
-    sort_direction = st.selectbox("Sort Direction Order", ["Highest to Lowest", "Lowest to Highest"])
     
-    sub_tab_games, sub_tab_props = st.tabs(["🏛️ Game Lines (Moneylines)", "👤 Specialized Player Props Matrix"])
+    with col_sort:
+        sort_metric = st.selectbox("Sort Data Metric By", ["EV Edge", "True Prob.", "Odds", "Wager"])
+    with col_order:
+        sort_order = st.selectbox("Order Direction", ["Highest to Lowest", "Lowest to Highest"])
     
-    def sort_extracted_df(target_slate):
-        if not target_slate: return pd.DataFrame()
-        target_df = pd.DataFrame(target_slate)
-        sort_col = "EV Edge" if "EV" in sort_metric else "True Prob." if "Prob" in sort_metric else "Matchup"
-        ascending_bool = True if "Lowest" in sort_direction else False
-        target_df = target_df.sort_values(by=sort_col, ascending=ascending_bool)
-        
-        display_df = target_df.copy()
-        display_df["True Prob."] = display_df["True Prob."].apply(lambda x: f"{x*100:.1f}%")
-        display_df["EV Edge"] = display_df["EV Edge"].apply(lambda x: f"{x*100:+.1f}%")
-        display_df["Wager"] = display_df["Wager"].apply(lambda x: f"${x:.2f}")
-        display_df["Units"] = display_df["Units"].apply(lambda x: f"{x:.2f}u")
-        return display_df
+    ascending_flag = True if sort_order == "Lowest to Highest" else False
 
-    with sub_tab_games:
-        sorted_games_df = sort_extracted_df(game_lines_slate)
-        if not sorted_games_df.empty: st.dataframe(sorted_games_df, use_container_width=True, hide_index=True)
-        else: st.info("No high-value game line opportunities discovered currently for this sport tier.")
-
-    with sub_tab_props:
-        sorted_props_df = sort_extracted_df(player_props_slate)
-        if not sorted_props_df.empty: st.dataframe(sorted_props_df, use_container_width=True, hide_index=True)
-        else: st.info("No high-value specialized player prop opportunities found currently on this slate.")
-    
-    st.markdown("---")
-    st.markdown("### 📝 Log a Play to the Syndicate Ledger")
-    
-    options_pool = {}
+    # Render Game Lines Sub-Canvas
+    st.markdown("#### 🏛️ Game Line Value Fields")
     if game_lines_slate:
-        for p in game_lines_slate: options_pool[f"Game Line: {p['Selection']} ({p['Matchup']})"] = ("Game Line", p)
+        df_games = pd.DataFrame(game_lines_slate).sort_values(by=sort_metric, ascending=ascending_flag)
+        st.dataframe(df_games.style.format({"True Prob.": "{:.2%}", "EV Edge": "{:.2%}", "Wager": "${:.2f}", "Units": "{:.2f}"}), use_container_width=True)
+    else:
+        st.info("No +EV game line markets found for this slate.")
+
+    # Render Player Props Sub-Canvas
+    st.markdown("#### 🎯 Player Prop Value Fields")
     if player_props_slate:
+        df_props = pd.DataFrame(player_props_slate).sort_values(by=sort_metric, ascending=ascending_flag)
+        st.dataframe(df_props.style.format({"True Prob.": "{:.2%}", "EV Edge": "{:.2%}", "Wager": "${:.2f}", "Units": "{:.2f}"}), use_container_width=True)
+    else:
+        st.info("No +EV player prop fields identified or league selection does not support active prop extraction queries.")
+
+# --- TAB 2: GROUP LEDGER MATRIX ---
+with ledger_tab:
+    st.markdown("### 📝 Shared Syndicate Ledger Matrix")
+    if not st.session_state.ledger.empty:
+        st.dataframe(st.session_state.ledger, use_container_width=True)
+    else:
+        st.info("The ledger is currently clear. No committed value profiles recorded yet.")
