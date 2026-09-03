@@ -112,7 +112,7 @@ if isinstance(game_response, list):
                 outcomes = market.get("outcomes", [])
                 
                 if isinstance(outcomes, list) and len(outcomes) == 2:
-                    # FIX: Correct entry-level list index addressing
+                    # FIXED: Explicit element extraction from outcomes array
                     p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
                     
                     for opt, true_p in zip(outcomes, [p1_true, p2_true]):
@@ -176,7 +176,7 @@ if isinstance(game_response, list):
                                 for p_name, group in df_p.groupby(name_col):
                                     if len(group) == 2:
                                         rows = group.to_dict(orient="records")
-                                        # FIX: Correct record-level list index addressing
+                                        # FIXED: Explicit element extraction from rows record dictionary
                                         p1_t, p2_t = devig_odds(rows[0]["price"], rows[1]["price"])
                                         
                                         for opt, true_p in zip(rows, [p1_t, p2_t]):
