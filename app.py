@@ -69,7 +69,7 @@ if not API_KEY:
     st.stop()
 
 # --- 7. PASS 1: FETCH BASE BULK GAME ML, SPREADS, AND TOTALS ---
-base_api_url = f"https://the-odds-api.com{SPORT}/odds"
+base_api_url = "https://the-odds-api.com" + str(SPORT) + "/odds"
 game_params = {
     "apiKey": API_KEY,
     "regions": "us",
@@ -139,7 +139,7 @@ for game in game_response:
     # --- PASS 2: INDEPENDENT PROPS DEEP LOOK (ONLY FOR MLB & NFL) ---
     if SPORT in ["baseball_mlb", "americanfootball_nfl"] and game_id:
         props_to_fetch = "pitcher_strikeouts,pitcher_record_an_out,batter_hits,batter_runs,batter_rbis" if SPORT == "baseball_mlb" else "player_pass_yds,player_rush_yds,player_rec_yds"
-        event_prop_url = f"https://the-odds-api.com{SPORT}/events/{game_id}/odds"
+        event_prop_url = "https://the-odds-api.com" + str(SPORT) + "/events/" + str(game_id) + "/odds"
         prop_params = {
             "apiKey": API_KEY,
             "regions": "us",
@@ -189,9 +189,7 @@ for game in game_response:
 # --- TAB 1: DISPLAY MATRICES ---
 with main_tab:
     st.markdown("### 🛠️ Interactive Sorting Filter Canvas")
-    
-    # UPGRADED: Added a dedicated row for filtering out specific market types
-    col_sort, col_order, col_market = st.columns([1, 1, 2])
+    col_sort, col_order, col_market = st.columns(3)
     
     with col_sort:
         sort_metric = st.selectbox("Sort Data Metric By", ["EV Edge", "True Prob.", "Odds", "Wager"])
@@ -210,8 +208,6 @@ with main_tab:
     st.markdown("#### 🏛️ Game Line Value Fields")
     if game_lines_slate:
         df_games = pd.DataFrame(game_lines_slate)
-        
-        # UPGRADED: Dynamically filter down the rows based on the user's multi-select choices
         df_filtered_games = df_games[df_games["Market"].isin(selected_markets)]
         
         if not df_filtered_games.empty:
