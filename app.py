@@ -68,13 +68,12 @@ if not API_KEY:
     with ledger_tab: st.warning("⚠️ Waiting for validation framework configuration parameters.")
     st.stop()
 
-# --- 7. PASS 1: FETCH BASE BULK GAME ML LINES ---
-# FIXED: Added the complete verified path structure
-base_api_url = f"https://api.the-odds-api.com/v4/sports/{SPORT}/odds"
+# --- 7. PASS 1: FETCH BASE BULK GAME ML, SPREADS, AND TOTALS ---
+base_api_url = f"https://the-odds-api.com{SPORT}/odds"
 game_params = {
     "apiKey": API_KEY,
     "regions": "us",
-    "markets": "h2h",
+    "markets": "h2h,spreads,totals",  # UPGRADED: Pulls spreads and over/under lines natively
     "oddsFormat": "american",
     "bookmakers": "fanduel"
 }
@@ -92,6 +91,7 @@ if isinstance(game_response, dict) and "msg" in game_response:
 game_lines_slate = []
 player_props_slate = []
 
+# Process Game Moneylines, Spreads, and Totals
 for game in game_response:
     if not isinstance(game, dict): continue
     matchup_name = f"{game.get('away_team')} @ {game.get('home_team')}"
@@ -101,27 +101,48 @@ for game in game_response:
     for bm in bookmakers:
         if bm.get("key") != "fanduel": continue
         markets = bm.get("markets", [])
+        
         for market in markets:
-            if market.get("key") == "h2h":
-                outcomes = market.get("outcomes", [])
-                if len(outcomes) == 2:
-                    p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
-                    for opt, true_p in zip(outcomes, [p1_true, p2_true]):
-                        proj_p = min(0.99, true_p * 1.06) 
-                        dec_odds = opt["price"] / 100 if opt["price"] > 0 else 100 / abs(opt["price"])
-                        ev = (proj_p * dec_odds) - (1 - proj_p)
-                        wager, units = calculate_kelly_unit(proj_p, opt["price"], BANKROLL, KELLY_CRITERIA)
-                        
-                        if ev > 0:
-                            game_lines_slate.append({
-                                "Matchup": matchup_name, "Selection": opt["name"], "Odds": opt["price"],
-                                "True Prob.": proj_p, "EV Edge": ev, "Wager": wager, "Units": units
-                            })
+            m_key = market.get("key")
+            outcomes = market.get("outcomes", [])
+            
+            if len(outcomes) == 2:
+                p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
+                
+                for opt, true_p in zip(outcomes, [p1_true, p2_true]):
+                    # Set targeted structural adjustments per market type
+                    mult = 1.06 if m_key == "h2h" else 1.05
+                    proj_p = min(0.99, true_p * mult)
+                    
+                    dec_odds = opt["price"] / 100 if opt["price"] > 0 else 100 / abs(opt["price"])
+                    ev = (proj_p * dec_odds) - (1 - proj_p)
+                    wager, units = calculate_kelly_unit(proj_p, opt["price"], BANKROLL, KELLY_CRITERIA)
+                    
+                    if ev > 0:
+                        # Clean label tagging for multi-market identification
+                        pt_suffix = f" ({opt['point']})" if "point" in opt else ""
+                        if m_key == "h2h":
+                            market_label = "Moneyline"
+                        elif m_key == "spreads":
+                            market_label = f"Spread"
+                        else:
+                            market_label = f"Total"
+                            
+                        game_lines_slate.append({
+                            "Matchup": matchup_name,
+                            "Market": market_label,
+                            "Selection": f"{opt['name']}{pt_suffix}",
+                            "Odds": opt["price"], 
+                            "True Prob.": proj_p, 
+                            "EV Edge": ev, 
+                            "Wager": wager, 
+                            "Units": units
+                        })
 
     # --- PASS 2: INDEPENDENT PROPS DEEP LOOK (ONLY FOR MLB & NFL) ---
     if SPORT in ["baseball_mlb", "americanfootball_nfl"] and game_id:
         props_to_fetch = "pitcher_strikeouts,pitcher_record_an_out,batter_hits,batter_runs,batter_rbis" if SPORT == "baseball_mlb" else "player_pass_yds,player_rush_yds,player_rec_yds"
-        event_prop_url = f"https://api.the-odds-api.com/v4/sports/{SPORT}/events/{game_id}/odds"
+        event_prop_url = f"https://the-odds-api.com{SPORT}/events/{game_id}/odds"
         prop_params = {
             "apiKey": API_KEY,
             "regions": "us",
@@ -168,6 +189,7 @@ for game in game_response:
         except Exception:
             pass 
 
+# --- TAB 1: DISPLAY MATRICES ---
 with main_tab:
     st.markdown("### 🛠️ Interactive Sorting Filter Canvas")
     col_sort, col_order = st.columns(2)
@@ -179,23 +201,14 @@ with main_tab:
     
     ascending_flag = True if sort_order == "Lowest to Highest" else False
 
-    st.markdown("#### 🏛️ Game Line Value Fields")
+    # Game Lines Canvas
+    st.markdown("#### 🏛️ Game Line Value Fields (Moneylines, Spreads & Totals)")
     if game_lines_slate:
         df_games = pd.DataFrame(game_lines_slate).sort_values(by=sort_metric, ascending=ascending_flag)
         st.dataframe(df_games.style.format({"True Prob.": "{:.2%}", "EV Edge": "{:.2%}", "Wager": "${:.2f}", "Units": "{:.2f}"}), use_container_width=True)
     else:
         st.info("No +EV game line markets found for this slate.")
 
+    # Player Props Canvas
     st.markdown("#### 🎯 Player Prop Value Fields")
     if player_props_slate:
-        df_props = pd.DataFrame(player_props_slate).sort_values(by=sort_metric, ascending=ascending_flag)
-        st.dataframe(df_props.style.format({"True Prob.": "{:.2%}", "EV Edge": "{:.2%}", "Wager": "${:.2f}", "Units": "{:.2f}"}), use_container_width=True)
-    else:
-        st.info("No +EV player prop fields identified or league selection does not support active prop extraction queries.")
-
-with ledger_tab:
-    st.markdown("### 📝 Shared Syndicate Ledger Matrix")
-    if not st.session_state.ledger.empty:
-        st.dataframe(st.session_state.ledger, use_container_width=True)
-    else:
-        st.info("The ledger is currently clear. No committed value profiles recorded yet.")
