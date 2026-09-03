@@ -48,6 +48,66 @@ def calculate_kelly_unit(true_prob, american_odds, bankroll, fraction):
     b_odds = american_odds / 100 if american_odds > 0 else 100 / abs(american_odds)
     q_prob = 1.0 - true_prob
     kelly_fraction = (b_odds * true_prob - q_prob) / b_odds
+    if kelly_fraction <= 0:
+        return 0.0, 0.0
+    wager = bankroll * kelly_fraction * fraction
+    return max(0.0, wager), max(0.0, wager / (bankroll * 0.01))
+
+def extract_player_name(df):
+    possible_keys = ["description", "player", "name", "participant"]
+    for key in possible_keys:
+        if key in df.columns:
+            return key
+    return None
+
+# 6. APP NAVIGATION FRAME
+main_tab, ledger_tab = st.tabs(["🔥 Active Value Boards", "📊 Group Ledger Matrix"])
+
+if not API_KEY:
+    with main_tab: st.warning("⚠️ Open the control panel (top-left menu arrow) and input your key to harvest active fields.")
+    with ledger_tab: st.warning("⚠️ Waiting for validation framework configuration parameters.")
+    st.stop()
+
+# --- 7. PASS 1: FETCH BASE BULK GAME ML LINES ---
+base_api_url = f"https://the-odds-api.com{SPORT}/odds/"
+game_params = {
+    "apiKey": API_KEY,
+    "regions": "us",
+    "markets": "h2h",
+    "oddsFormat": "american",
+    "bookmakers": "fanduel"
+}
+
+try:
+    game_response = requests.get(base_api_url, params=game_params, timeout=10).json()
+except Exception as e:
+    st.error(f"📡 API Game Line Connection Dropout: {e}")
+    st.stop()
+
+if isinstance(game_response, dict) and "msg" in game_response:
+    st.error(f"API Provider Error: {game_response['msg']}")
+    st.stop()
+
+game_lines_slate = []
+player_props_slate = []
+
+for game in game_response:
+    if not isinstance(game, dict): continue
+    matchup_name = f"{game.get('away_team')} @ {game.get('home_team')}"
+    game_id = game.get("id")
+    bookmakers = game.get("bookmakers", [])
+    
+    for bm in bookmakers:
+        if bm.get("key") != "fanduel": continue
+        markets = bm.get("markets", [])
+        for market in markets:
+            if market.get("key") == "h2h":
+                outcomes = market.get("outcomes", [])
+                if len(outcomes) == 2:
+                    p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
+                    for opt, true_p in zip(outcomes, [p1_true, p2_true]):
+                        proj_p = min(0.99, true_p * 1.06) 
+                        dec_odds = opt["price"] / 100 if opt["price"] > 0 else 100 / abs(opt["price"])
                         ev = (proj_p * dec_odds) - (1 - proj_p)
                         wager, units = calculate_kelly_unit(proj_p, opt["price"], BANKROLL, KELLY_CRITERIA)
                         
@@ -57,7 +117,6 @@ def calculate_kelly_unit(true_prob, american_odds, bankroll, fraction):
                                 "True Prob.": proj_p, "EV Edge": ev, "Wager": wager, "Units": units
                             })
 
-    # --- PASS 2: INDEPENDENT PROPS DEEP LOOK (ONLY FOR MLB & NFL) ---
     if SPORT in ["baseball_mlb", "americanfootball_nfl"] and game_id:
         props_to_fetch = "pitcher_strikeouts,pitcher_record_an_out,batter_hits,batter_runs,batter_rbis" if SPORT == "baseball_mlb" else "player_pass_yds,player_rush_yds,player_rec_yds"
         event_prop_url = f"https://the-odds-api.com{SPORT}/events/{game_id}/odds"
@@ -107,7 +166,6 @@ def calculate_kelly_unit(true_prob, american_odds, bankroll, fraction):
         except Exception:
             pass 
 
-# --- TAB 1: DISPLAY MATRICES ---
 with main_tab:
     st.markdown("### 🛠️ Interactive Sorting Filter Canvas")
     col_sort, col_order = st.columns(2)
@@ -119,7 +177,6 @@ with main_tab:
     
     ascending_flag = True if sort_order == "Lowest to Highest" else False
 
-    # Game Lines Canvas
     st.markdown("#### 🏛️ Game Line Value Fields")
     if game_lines_slate:
         df_games = pd.DataFrame(game_lines_slate).sort_values(by=sort_metric, ascending=ascending_flag)
@@ -127,7 +184,6 @@ with main_tab:
     else:
         st.info("No +EV game line markets found for this slate.")
 
-    # Player Props Canvas
     st.markdown("#### 🎯 Player Prop Value Fields")
     if player_props_slate:
         df_props = pd.DataFrame(player_props_slate).sort_values(by=sort_metric, ascending=ascending_flag)
@@ -135,10 +191,10 @@ with main_tab:
     else:
         st.info("No +EV player prop fields identified or league selection does not support active prop extraction queries.")
 
-# --- TAB 2: GROUP LEDGER MATRIX ---
 with ledger_tab:
     st.markdown("### 📝 Shared Syndicate Ledger Matrix")
     if not st.session_state.ledger.empty:
         st.dataframe(st.session_state.ledger, use_container_width=True)
     else:
         st.info("The ledger is currently clear. No committed value profiles recorded yet.")
+
