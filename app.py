@@ -72,9 +72,7 @@ if not API_KEY:
 
 # --- 7. PASS 1: FETCH BASE BULK GAME ML, SPREADS, AND TOTALS ---
 clean_sport = str(SPORT).strip()
-
-# STABLE: Hardcoded string concatenation prevents stripping out forward slashes on mobile
-base_api_url = "https://the-odds-api.com" + clean_sport + "/odds"
+base_api_url = f"https://api.the-odds-api.com/v4/sports/{clean_sport}/odds"
 
 game_params = {
     "apiKey": str(API_KEY).strip(),
@@ -97,115 +95,113 @@ if isinstance(game_response, dict) and "msg" in game_response:
 game_lines_slate = []
 player_props_slate = []
 
-for game in game_response:
-    if not isinstance(game, dict): continue
-    matchup_name = game.get('away_team', 'Away') + " @ " + game.get('home_team', 'Home')
-    game_id = game.get("id")
-    bookmakers = game.get("bookmakers", [])
-    
-    for bm in bookmakers:
-        bm_key = bm.get("key")
-        if bm_key not in ["fanduel", "draftkings"]: continue
+if isinstance(game_response, list):
+    for game in game_response:
+        if not isinstance(game, dict): continue
+        matchup_name = game.get('away_team', 'Away') + " @ " + game.get('home_team', 'Home')
+        game_id = game.get("id")
+        bookmakers = game.get("bookmakers", [])
         
-        markets = bm.get("markets", [])
-        for market in markets:
-            m_key = market.get("key")
-            outcomes = market.get("outcomes", [])
+        for bm in bookmakers:
+            bm_key = bm.get("key")
+            if bm_key not in ["fanduel", "draftkings"]: continue
             
-            if isinstance(outcomes, list) and len(outcomes) == 2:
-                p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
+            markets = bm.get("markets", [])
+            for market in markets:
+                m_key = market.get("key")
+                outcomes = market.get("outcomes", [])
                 
-                for opt, true_p in zip(outcomes, [p1_true, p2_true]):
-                    mult = 1.06 if m_key == "h2h" else 1.05
-                    proj_p = min(0.99, true_p * mult)
+                if isinstance(outcomes, list) and len(outcomes) == 2:
+                    p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
                     
-                    dec_odds = opt["price"] / 100 if opt["price"] > 0 else 100 / abs(opt["price"])
-                    ev = (proj_p * dec_odds) - (1 - proj_p)
-                    wager, units = calculate_kelly_unit(proj_p, opt["price"], BANKROLL, KELLY_CRITERIA)
-                    
-                    if VIEW_MODE == "Show Raw Board (Debug Stream)" or ev > 0:
-                        pt_suffix = " (" + str(opt['point']) + ")" if "point" in opt else ""
-                        if m_key == "h2h":
-                            market_label = "Moneyline"
-                        elif m_key == "spreads":
-                            market_label = "Spread"
-                        else:
-                            market_label = "Over/Under"
+                    for opt, true_p in zip(outcomes, [p1_true, p2_true]):
+                        mult = 1.06 if m_key == "h2h" else 1.05
+                        proj_p = min(0.99, true_p * mult)
+                        
+                        dec_odds = opt["price"] / 100 if opt["price"] > 0 else 100 / abs(opt["price"])
+                        ev = (proj_p * dec_odds) - (1 - proj_p)
+                        wager, units = calculate_kelly_unit(proj_p, opt["price"], BANKROLL, KELLY_CRITERIA)
+                        
+                        if VIEW_MODE == "Show Raw Board (Debug Stream)" or ev > 0:
+                            pt_suffix = " (" + str(opt['point']) + ")" if "point" in opt else ""
+                            if m_key == "h2h":
+                                market_label = "Moneyline"
+                            elif m_key == "spreads":
+                                market_label = "Spread"
+                            else:
+                                market_label = "Over/Under"
+                                
+                            game_lines_slate.append({
+                                "Bookmaker": bm_key.upper(),
+                                "Matchup": matchup_name,
+                                "Market": market_label,
+                                "Selection": str(opt['name']) + pt_suffix,
+                                "Odds": opt["price"], 
+                                "True Prob.": proj_p, 
+                                "EV Edge": ev, 
+                                "Wager": wager, 
+                                "Units": units
+                            })
+
+        # --- PASS 2: INDEPENDENT PROPS DEEP LOOK (ONLY FOR MLB & NFL) ---
+        if SPORT in ["baseball_mlb", "americanfootball_nfl"] and game_id:
+            props_to_fetch = "pitcher_strikeouts,pitcher_record_an_out,batter_hits,batter_runs,batter_rbis" if SPORT == "baseball_mlb" else "player_pass_yds,player_rush_yds,player_rec_yds"
+            clean_id = str(game_id).strip()
+            event_prop_url = f"https://api.the-odds-api.com/v4/sports/{clean_sport}/events/{clean_id}/odds"
+            
+            prop_params = {
+                "apiKey": str(API_KEY).strip(),
+                "regions": "us",
+                "markets": props_to_fetch,
+                "oddsFormat": "american",
+                "bookmakers": "fanduel,draftkings"
+            }
+            
+            try:
+                prop_response = requests.get(event_prop_url, params=prop_params, timeout=10).json()
+                if isinstance(prop_response, dict) and "bookmakers" in prop_response:
+                    for p_bm in prop_response.get("bookmakers", []):
+                        p_bm_key = p_bm.get("key")
+                        if p_bm_key not in ["fanduel", "draftkings"]: continue
+                        
+                        for p_market in p_bm.get("markets", []):
+                            m_key = p_market.get("key")
+                            p_outcomes = p_market.get("outcomes", [])
                             
-                        game_lines_slate.append({
-                            "Bookmaker": bm_key.upper(),
-                            "Matchup": matchup_name,
-                            "Market": market_label,
-                            "Selection": str(opt['name']) + pt_suffix,
-                            "Odds": opt["price"], 
-                            "True Prob.": proj_p, 
-                            "EV Edge": ev, 
-                            "Wager": wager, 
-                            "Units": units
-                        })
-
-    # --- PASS 2: INDEPENDENT PROPS DEEP LOOK (ONLY FOR MLB & NFL) ---
-    if SPORT in ["baseball_mlb", "americanfootball_nfl"] and game_id:
-        props_to_fetch = "pitcher_strikeouts,pitcher_record_an_out,batter_hits,batter_runs,batter_rbis" if SPORT == "baseball_mlb" else "player_pass_yds,player_rush_yds,player_rec_yds"
-        clean_id = str(game_id).strip()
-        
-        # STABLE: Hardcoded string concatenation for the detailed props endpoint
-        event_prop_url = "https://the-odds-api.com" + clean_sport + "/events/" + clean_id + "/odds"
-        
-        prop_params = {
-            "apiKey": str(API_KEY).strip(),
-            "regions": "us",
-            "markets": props_to_fetch,
-            "oddsFormat": "american",
-            "bookmakers": "fanduel,draftkings"
-        }
-        
-        try:
-            prop_response = requests.get(event_prop_url, params=prop_params, timeout=10).json()
-            if isinstance(prop_response, dict) and "bookmakers" in prop_response:
-                for p_bm in prop_response.get("bookmakers", []):
-                    p_bm_key = p_bm.get("key")
-                    if p_bm_key not in ["fanduel", "draftkings"]: continue
-                    
-                    for p_market in p_bm.get("markets", []):
-                        m_key = p_market.get("key")
-                        p_outcomes = p_market.get("outcomes", [])
-                        
-                        df_p = pd.DataFrame(p_outcomes)
-                        name_col = extract_player_name(df_p)
-                        
-                        if name_col and not df_p.empty:
-                            for p_name, group in df_p.groupby(name_col):
-                                if len(group) == 2:
-                                    rows = group.to_dict(orient="records")
-                                    p1_t, p2_t = devig_odds(rows[0]["price"], rows[1]["price"])
-                                    
-                                    for opt, true_p in zip(rows, [p1_t, p2_t]):
-                                        proj_p = min(0.99, true_p * 1.07) 
-                                        dec_odds = opt["price"] / 100 if opt["price"] > 0 else 100 / abs(opt["price"])
-                                        ev = (proj_p * dec_odds) - (1 - proj_p)
-                                        wager, units = calculate_kelly_unit(proj_p, opt["price"], BANKROLL, KELLY_CRITERIA)
+                            df_p = pd.DataFrame(p_outcomes)
+                            name_col = extract_player_name(df_p)
+                            
+                            if name_col and not df_p.empty:
+                                for p_name, group in df_p.groupby(name_col):
+                                    if len(group) == 2:
+                                        rows = group.to_dict(orient="records")
+                                        p1_t, p2_t = devig_odds(rows[0]["price"], rows[1]["price"])
                                         
-                                        if VIEW_MODE == "Show Raw Board (Debug Stream)" or ev > 0:
-                                            market_clean = m_key.replace("player_", "").replace("pitcher_", "").replace("_", " ").title()
-                                            pt_val = " " + str(opt.get('point', '')) if 'point' in opt else ""
-                                            player_props_slate.append({
-                                                "Bookmaker": p_bm_key.upper(),
-                                                "Matchup": matchup_name,
-                                                "Selection": str(p_name) + " [" + market_clean + "]: " + str(opt['name']) + pt_val,
-                                                "Odds": opt["price"], "True Prob.": proj_p, "EV Edge": ev,
-                                                "Wager": wager, "Units": units
-                                            })
-                        elif not df_p.empty:
-                            st.sidebar.caption("⚠️ Unexpected columns in market " + str(m_key) + ": " + str(list(df_p.columns)))
-        except Exception:
-            pass 
+                                        for opt, true_p in zip(rows, [p1_t, p2_t]):
+                                            proj_p = min(0.99, true_p * 1.07) 
+                                            dec_odds = opt["price"] / 100 if opt["price"] > 0 else 100 / abs(opt["price"])
+                                            ev = (proj_p * dec_odds) - (1 - proj_p)
+                                            wager, units = calculate_kelly_unit(proj_p, opt["price"], BANKROLL, KELLY_CRITERIA)
+                                            
+                                            if VIEW_MODE == "Show Raw Board (Debug Stream)" or ev > 0:
+                                                market_clean = m_key.replace("player_", "").replace("pitcher_", "").replace("_", " ").title()
+                                                pt_val = f" {opt.get('point', '')}" if 'point' in opt else ""
+                                                player_props_slate.append({
+                                                    "Bookmaker": p_bm_key.upper(),
+                                                    "Matchup": matchup_name,
+                                                    "Market": market_clean,
+                                                    "Selection": f"{p_name}: {opt['name']}{pt_val}",
+                                                    "Odds": opt["price"], 
+                                                    "True Prob.": proj_p, 
+                                                    "EV Edge": ev,
+                                                    "Wager": wager, 
+                                                    "Units": units
+                                                })
+            except Exception:
+                pass 
 
-# --- TAB 1: DISPLAY MATRICES ---
+# --- 8. UI RENDER INTERFACE PANEL ---
 with main_tab:
-    st.markdown("### 🛠️ Interactive Sorting Filter Canvas")
-    col_sort, col_order, col_market = st.columns(3)
+    board_game, board_prop = st.columns(2)
     
-    with col_sort:
-        sort_metric = st.selectbox("Sort Data Metric By", ["EV Edge", "True Prob.", "Odds", "Wager"])
-    with col_order:
+    with board_game:
