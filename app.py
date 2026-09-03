@@ -39,9 +39,7 @@ if not API_KEY:
 
 # --- 5. PASS 1: FETCH AND PROCESS DATA ---
 clean_sport = str(SPORT).strip()
-
-# FIXED: Hardcoded clean endpoint pattern stops domain names from squashing together
-base_api_url = f"https://api.the-odds-api.com/v4/sports/{clean_sport}/odds"
+base_api_url = f"https://the-odds-api.com{clean_sport}/odds"
 
 game_params = {
     "apiKey": str(API_KEY).strip(),
@@ -72,7 +70,6 @@ if isinstance(game_response, list):
                 m_key = market.get("key")
                 outcomes = market.get("outcomes", [])
                 
-                # FIXED: Clear list array mappings to pull metrics without hitting type errors
                 if isinstance(outcomes, list) and len(outcomes) == 2:
                     p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
                     
@@ -91,8 +88,8 @@ if isinstance(game_response, list):
                             
                             game_lines_slate.append({
                                 "Bookmaker": bm_key, "Matchup": matchup, "Market": market_label,
-                                "Selection": f"{opt['name']}{pt_suffix}", "Odds": opt["price"],
-                                "True Prob.": proj_p, "EV Edge": ev, "Wager": wager, "Units": units
+                                "Selection": f"{opt['name']}{pt_suffix}", "Odds": int(opt["price"]),
+                                "True Prob.": float(proj_p), "EV Edge": float(ev), "Wager": float(wager), "Units": float(units)
                             })
 
 # --- 6. UI RENDER ---
@@ -100,6 +97,19 @@ with main_tab:
     st.markdown("### 🏟️ Game Line Value Fields")
     if game_lines_slate:
         df = pd.DataFrame(game_lines_slate).sort_values(by="EV Edge", ascending=False)
-        st.dataframe(df, use_container_width=True)
+        
+        # FIXED: Enforced a column configuration framework to clean decimal points globally while preserving standard column sorting headers
+        st.dataframe(
+            df,
+            column_config={
+                "Odds": st.column_config.NumberColumn("Odds", format="%d"),
+                "True Prob.": st.column_config.NumberColumn("True Prob.", format="%.2f"),
+                "EV Edge": st.column_config.NumberColumn("EV Edge", format="%.2f"),
+                "Wager": st.column_config.NumberColumn("Wager ($)", format="$%.2f"),
+                "Units": st.column_config.NumberColumn("Units", format="%.2f")
+            },
+            use_container_width=True,
+            hide_index=True
+        )
     else:
         st.info("No active fields found matching your filter rules.")
