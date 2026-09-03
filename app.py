@@ -109,7 +109,6 @@ if API_KEY:
                                     
                         # Process Player Props (Strikeouts, Touchdowns, Home Runs)
                         elif "player_" in m_key or "pitcher_" in m_key or "batter_" in m_key:
-                            # Group outcomes into pairs for devig processing if applicable
                             for i in range(0, len(outcomes), 2):
                                 if i+1 >= len(outcomes): break
                                 p1_true, p2_true = devig_odds(outcomes[i]["price"], outcomes[i+1]["price"])
@@ -137,21 +136,17 @@ if API_KEY:
             with col_order:
                 sort_direction = st.selectbox("Sort Direction Order", ["Highest to Lowest", "Lowest to Highest"])
             
-            # Sub-Tabs separating Market Profiles
             sub_tab_games, sub_tab_props = st.tabs(["🏛️ Game Lines (Moneylines)", "👤 Player Props Market Matrix"])
             
-            # Helper Core Data Sorting Function
             def sort_extracted_df(target_slate):
                 if not target_slate: return pd.DataFrame()
                 target_df = pd.DataFrame(target_slate)
                 
-                # Assign Column Targets
                 sort_col = "EV Edge" if "EV" in sort_metric else "True Prob." if "Prob" in sort_metric else "Matchup"
                 ascending_bool = True if "Lowest" in sort_direction else False
                 
                 target_df = target_df.sort_values(by=sort_col, ascending=ascending_bool)
                 
-                # Format Data Strings for Display Output
                 display_df = target_df.copy()
                 display_df["True Prob."] = display_df["True Prob."].apply(lambda x: f"{x*100:.1f}%")
                 display_df["EV Edge"] = display_df["EV Edge"].apply(lambda x: f"{x*100:+.1f}%")
@@ -159,30 +154,37 @@ if API_KEY:
                 display_df["Units"] = display_df["Units"].apply(lambda x: f"{x:.2f}u")
                 return display_df
 
-            # Render Game Lines Table
             with sub_tab_games:
                 sorted_games_df = sort_extracted_df(game_lines_slate)
                 if not sorted_games_df.empty:
                     st.dataframe(sorted_games_df, use_container_width=True, hide_index=True)
                 else:
-                    st.info("No high-value moneyline gaps discovered currently.")
+                    st.info("No high-value moneyline wagers found currently.")
 
-            # Render Player Props Table
             with sub_tab_props:
                 sorted_props_df = sort_extracted_df(player_props_slate)
                 if not sorted_props_df.empty:
                     st.dataframe(sorted_props_df, use_container_width=True, hide_index=True)
                 else:
-                    st.info("No high-value prop gaps discovered right now for this slate window.")
+                    st.info("No high-value prop options found currently.")
             
-            # Combined Logging Frame
             st.markdown("---")
             st.markdown("### 📝 Log a Play to the Group Ledger")
-            all_available_options = []
-            if game_lines_slate: all_available_options.extend([f"Game: {p['Selection']} ({p['Matchup']})" for p in game_lines_slate])
-            if player_props_slate: all_available_options.extend([f"Prop: {p['Selection']} ({p['Matchup']})" for p in player_props_slate])
             
-            if all_available_options:
+            # Formulating dictionary map reference pools to cleanly grab item references later
+            options_pool = {}
+            if game_lines_slate:
+                for p in game_lines_slate:
+                    label = f"Game Line: {p['Selection']} ({p['Matchup']})"
+                    options_pool[label] = ("game", p)
+            if player_props_slate:
+                for p in player_props_slate:
+                    label = f"Player Prop: {p['Selection']} ({p['Matchup']})"
+                    options_pool[label] = ("prop", p)
+                    
+            if options_pool:
                 c1, c2, c3 = st.columns(3)
                 with c1: f_name = st.selectbox("Who is betting?", ["Myself", "Friend A", "Friend B", "Friend C"])
-                with c2: target_selection = st.selectbox("Select Target Play Slip", all_available_options)
+                with c2: target_selection = st.selectbox("Select Target Play Slip", list(options_pool.keys()))
+                with c3: actual_wager = st.number_input("Wager Stake Amount ($)", min_value=1.0, value=20.0, step=5.0)
+                
