@@ -69,7 +69,8 @@ if not API_KEY:
     st.stop()
 
 # --- 7. PASS 1: FETCH BASE BULK GAME ML LINES ---
-base_api_url = f"https://the-odds-api.com{SPORT}/odds"
+# FIXED: Added the complete verified path structure
+base_api_url = f"https://api.the-odds-api.com/v4/sports/{SPORT}/odds"
 game_params = {
     "apiKey": API_KEY,
     "regions": "us",
@@ -77,6 +78,7 @@ game_params = {
     "oddsFormat": "american",
     "bookmakers": "fanduel"
 }
+
 try:
     game_response = requests.get(base_api_url, params=game_params, timeout=10).json()
 except Exception as e:
@@ -116,9 +118,10 @@ for game in game_response:
                                 "True Prob.": proj_p, "EV Edge": ev, "Wager": wager, "Units": units
                             })
 
+    # --- PASS 2: INDEPENDENT PROPS DEEP LOOK (ONLY FOR MLB & NFL) ---
     if SPORT in ["baseball_mlb", "americanfootball_nfl"] and game_id:
         props_to_fetch = "pitcher_strikeouts,pitcher_record_an_out,batter_hits,batter_runs,batter_rbis" if SPORT == "baseball_mlb" else "player_pass_yds,player_rush_yds,player_rec_yds"
-        event_prop_url = f"https://the-odds-api.com{SPORT}/events/{game_id}/odds"
+        event_prop_url = f"https://api.the-odds-api.com/v4/sports/{SPORT}/events/{game_id}/odds"
         prop_params = {
             "apiKey": API_KEY,
             "regions": "us",
@@ -196,4 +199,3 @@ with ledger_tab:
         st.dataframe(st.session_state.ledger, use_container_width=True)
     else:
         st.info("The ledger is currently clear. No committed value profiles recorded yet.")
-
