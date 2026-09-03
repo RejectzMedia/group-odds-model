@@ -48,7 +48,6 @@ def calculate_kelly_unit(true_prob, american_odds, bankroll, fraction):
     b_odds = american_odds / 100 if american_odds > 0 else 100 / abs(american_odds)
     q_prob = 1.0 - true_prob
     kelly_fraction = (b_odds * true_prob - q_prob) / b_odds
-    if kelly_fraction  0 else 100 / abs(opt["price"])
                         ev = (proj_p * dec_odds) - (1 - proj_p)
                         wager, units = calculate_kelly_unit(proj_p, opt["price"], BANKROLL, KELLY_CRITERIA)
                         
