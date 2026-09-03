@@ -143,3 +143,4 @@ with ledger_tab:
         st.dataframe(st.session_state.ledger, use_container_width=True)
     else:
         st.info("The ledger is currently clear. No committed value profiles recorded yet.")
+manually delete broken line 51
