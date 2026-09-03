@@ -61,7 +61,7 @@ def calculate_kelly_unit(true_prob, american_odds, bankroll, fraction):
     # --- PASS 2: INDEPENDENT PROPS DEEP LOOK (ONLY FOR MLB & NFL) ---
     if SPORT in ["baseball_mlb", "americanfootball_nfl"] and game_id:
         props_to_fetch = "pitcher_strikeouts,pitcher_record_an_out,batter_hits,batter_runs,batter_rbis" if SPORT == "baseball_mlb" else "player_pass_yds,player_rush_yds,player_rec_yds"
-        event_prop_url = f"https://api.the-odds-api.com/v4/sports/{SPORT}/events/{game_id}/odds"
+        event_prop_url = f"https://the-odds-api.com{SPORT}/events/{game_id}/odds"
         prop_params = {
             "apiKey": API_KEY,
             "regions": "us",
