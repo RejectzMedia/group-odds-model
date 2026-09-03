@@ -3,10 +3,10 @@ import pandas as pd
 import numpy as np
 import requests
 
-# 1. FLUSH SERVER CACHE
+# 1. FLUSH CACHE
 st.cache_data.clear()
 
-# 2. PAGE LAYOUT CONFIG
+# 2. PAGE CONFIG
 st.set_page_config(page_title="Syndicate Analytics Pro", page_icon="🎯", layout="wide")
 st.markdown("""
     <style>
@@ -19,7 +19,7 @@ st.markdown("""
 st.title("🎯 SharpOdds Syndicate Pro")
 st.caption("Advanced Line Analytics, Player Prop Vectors & Dynamic Multi-Sorting Ledger")
 
-# 3. GROUP STORAGE SETUP (Cloud Session State Memory)
+# 3. GROUP STORAGE SETUP
 if "ledger" not in st.session_state:
     st.session_state.ledger = pd.DataFrame(columns=[
         "Friend", "Type", "Matchup", "Selection", "Odds", "Wager ($)", "True Prob.", "EV Edge", "Status"
@@ -51,7 +51,7 @@ def calculate_kelly_unit(true_prob, american_odds, bankroll, fraction):
 # 6. APP TABS
 main_tab, ledger_tab = st.tabs(["🔥 Active Value Boards", "📊 Group Ledger Matrix"])
 
-# 7. EARLY BLOCKS TO SAFELY RUN THE API
+# 7. EARLY SAFETY BLOCKS
 if not API_KEY:
     with main_tab: st.warning("⚠️ Open the control panel (top-left menu arrow) and input your key to harvest active fields.")
     with ledger_tab: st.warning("⚠️ Waiting for validation framework configuration parameters.")
@@ -136,10 +136,8 @@ for game in response:
 with main_tab:
     st.markdown("### 🛠️ Interactive Sorting Filter Canvas")
     col_sort, col_order = st.columns(2)
-    with col_sort:
-        sort_metric = st.selectbox("Sort Data Metric By", ["Expected Value (EV)", "True Win Probability", "Matchup Alphabetical"])
-    with col_order:
-        sort_direction = st.selectbox("Sort Direction Order", ["Highest to Lowest", "Lowest to Highest"])
+    sort_metric = st.selectbox("Sort Data Metric By", ["Expected Value (EV)", "True Win Probability", "Matchup Alphabetical"])
+    sort_direction = st.selectbox("Sort Direction Order", ["Highest to Lowest", "Lowest to Highest"])
     
     sub_tab_games, sub_tab_props = st.tabs(["🏛️ Game Lines (Moneylines)", "👤 Player Props Market Matrix"])
     
@@ -174,6 +172,7 @@ with main_tab:
     st.markdown("---")
     st.markdown("### 📝 Log a Play to the Group Ledger")
     
+    # Map label descriptions directly to the underlying object structures
     options_pool = {}
     if game_lines_slate:
         for p in game_lines_slate:
@@ -208,7 +207,9 @@ with main_tab:
     else:
         st.caption("No edge profiles available to compile log slips.")
 
-# --- TAB 2: SCOREBOARD DISPLAY (FIXED INDENTATION) ---
+# --- TAB 2: SCOREBOARD DISPLAY (FLATTENED NO-NEST LOGIC) ---
 with ledger_tab:
     st.markdown("### 📈 Live Ledger & Status Management Matrix")
-    if not st.session_state.ledger.empty:
+    
+    # If the database has records, display them cleanly
+    if len(st.session_state.ledger) > 0:
