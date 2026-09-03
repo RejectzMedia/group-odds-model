@@ -65,9 +65,9 @@ if API_KEY:
             for bm in bookmakers:
                 if bm.get("key") == "fanduel":
                     markets = bm.get("markets", [])
-                    for mk in markets:
-                        if mk.get("key") == "h2h":
-                            outcomes = mk.get("outcomes", [])
+                    for market in markets:
+                        if market.get("key") == "h2h":
+                            outcomes = market.get("outcomes", [])
                             if len(outcomes) != 2: continue
                             
                             p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
@@ -84,11 +84,8 @@ if API_KEY:
                                         "Bet Selection": opt["name"],
                                         "Odds": opt["price"],
                                         "True Win Prob.": f"{model_projection*100:.1f}%",
-                                        "True Prob Float": model_projection,
                                         "EV Edge": f"{ev*100:+.1f}%",
-                                        "EV Float": ev,
                                         "Suggested Wager": f"${wager:.2f}",
-                                        "Wager Float": wager,
                                         "Units": f"{units:.2f}u"
                                     })
         
@@ -109,12 +106,12 @@ if API_KEY:
                     friend = st.selectbox("Who is betting?", ["Myself", "Friend A", "Friend B", "Friend C"])
                 with col2:
                     selected_match = st.selectbox("Select Target Play", df["Matchup"].unique())
+                    # FIXED: Added .iloc[0] to isolate a single row entry cleanly
                     match_row = df[df["Matchup"] == selected_match].iloc[0]
                 with col3:
                     amt = st.number_input("Actual Amount Bet ($)", min_value=1.0, value=20.0, step=5.0)
                 
                 if st.button("🚀 Commit Play to Syndicate Ledger"):
-                    # Build fresh entry row dictionary
                     new_entry = {
                         "Friend": friend,
                         "Matchup": selected_match,
@@ -128,26 +125,15 @@ if API_KEY:
                     st.session_state.ledger = pd.concat([st.session_state.ledger, pd.DataFrame([new_entry])], ignore_index=True)
                     st.success(f"Successfully logged ${amt:.2f} on {match_row['Bet Selection']} under {friend}'s profile!")
             else:
-                st.info("🔎 Analyzing... No high-value mathematical gaps found in active lines. Try switching leagues in the control panel.")
+                st.info("🔎 Analyzing... No high-value mathematical gaps found in active lines right now. Try switching leagues in the control panel.")
 
         # --- TAB 2: SYNDICATE LEDGER & SCOREBOARD ---
         with tab2:
             st.markdown("### 📈 Live Profit & Loss Scoreboard")
             
             if not st.session_state.ledger.empty:
-                # Helper logic to calculate prospective payouts
-                def calculate_payout(row):
-                    odds = row["Odds"]
-                    wager = row["Wager ($)"]
-                    if odds > 0:
-                        return wager * (odds / 100)
-                    else:
-                        return wager * (100 / abs(odds))
-
-                # Display the full interactive table logs
                 st.dataframe(st.session_state.ledger, use_container_width=True, hide_index=True)
                 
-                # Clear ledger control
                 if st.button("⚠️ Clear Entire History Log"):
                     st.session_state.ledger = pd.DataFrame(columns=[
                         "Friend", "Matchup", "Selection", "Odds", "Wager ($)", "True Win Prob.", "EV Edge", "Status"
