@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import requests
 
-# 1. SERVER REFRESH FLUSH
+# 1. SERVER WORKSPACE REFRESH FLUSH
 st.cache_data.clear()
 
 # 2. APPLICATION PRESENTATION LAYOUT
@@ -61,104 +61,109 @@ if not API_KEY:
     with ledger_tab: st.warning("⚠️ Waiting for validation framework configuration parameters.")
     st.stop()
 
-# --- 7. DYNAMIC MARKET PATH TARGETING ---
-# Configures exact API sub-keys matching your specific request guidelines
-markets_to_pull = "h2h" # Base game lines for all sports
-
-if SPORT == "baseball_mlb":
-    markets_to_pull += ",pitcher_strikeouts,pitcher_record_an_out,batter_hits,batter_runs,batter_rbis"
-elif SPORT == "americanfootball_nfl":
-    markets_to_pull += ",player_pass_yds,player_rush_yds,player_rec_yds"
-
-base_api_url = f"https://the-odds-api.com{SPORT}/odds/"
-params = {
+# --- 7. PASS 1: FETCH BASE BULK GAME ML LINES ---
+base_api_url = f"https://api.the-odds-api.com/v4/sports/{SPORT}/odds/"
+game_params = {
     "apiKey": API_KEY,
     "regions": "us",
-    "markets": markets_to_pull,
+    "markets": "h2h",
     "oddsFormat": "american",
     "bookmakers": "fanduel"
 }
 
-# --- 8. SECURE DATA HARVESTING SLATE ---
-response = []
 try:
-    res = requests.get(base_api_url, params=params, timeout=10)
-    response = res.json()
+    game_response = requests.get(base_api_url, params=game_params, timeout=10).json()
 except Exception as e:
-    st.error(f"📡 API Connection Dropout: {e}")
+    st.error(f"📡 API Game Line Connection Dropout: {e}")
     st.stop()
 
-if isinstance(response, dict) and "msg" in response:
-    st.error(f"API Provider Error: {response['msg']}")
+if isinstance(game_response, dict) and "msg" in game_response:
+    st.error(f"API Provider Error: {game_response['msg']}")
     st.stop()
 
-# 9. MULTI-MARKET CONVERSION MATRICES
 game_lines_slate = []
 player_props_slate = []
 
-for game in response:
+# Process Game Moneylines
+for game in game_response:
     if not isinstance(game, dict): continue
     matchup_name = f"{game.get('away_team')} @ {game.get('home_team')}"
+    game_id = game.get("id")
     bookmakers = game.get("bookmakers", [])
     
     for bm in bookmakers:
         if bm.get("key") != "fanduel": continue
         markets = bm.get("markets", [])
-        
         for market in markets:
-            m_key = market.get("key")
-            outcomes = market.get("outcomes", [])
-            if len(outcomes) < 2: continue
-            
-            # A. Process Traditional Game Lines (Moneylines / H2H)
-            if m_key == "h2h" and len(outcomes) == 2:
-                p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
-                for opt, true_p in zip(outcomes, [p1_true, p2_true]):
-                    proj_p = min(0.99, true_p * 1.06) # Simulated 6% market variance advantage
-                    dec_odds = opt["price"] / 100 if opt["price"] > 0 else 100 / abs(opt["price"])
-                    ev = (proj_p * dec_odds) - (1 - proj_p)
-                    wager, units = calculate_kelly_unit(proj_p, opt["price"], BANKROLL, KELLY_CRITERIA)
-                    
-                    if ev > 0:
-                        game_lines_slate.append({
-                            "Matchup": matchup_name, "Selection": opt["name"], "Odds": opt["price"],
-                            "True Prob.": proj_p, "EV Edge": ev, "Wager": wager, "Units": units
-                        })
+            if market.get("key") == "h2h":
+                outcomes = market.get("outcomes", [])
+                if len(outcomes) == 2:
+                    p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
+                    for opt, true_p in zip(outcomes, [p1_true, p2_true]):
+                        proj_p = min(0.99, true_p * 1.06) 
+                        dec_odds = opt["price"] / 100 if opt["price"] > 0 else 100 / abs(opt["price"])
+                        ev = (proj_p * dec_odds) - (1 - proj_p)
+                        wager, units = calculate_kelly_unit(proj_p, opt["price"], BANKROLL, KELLY_CRITERIA)
                         
-            # B. Process Specialized Player Props
-            elif len(outcomes) >= 2:
-                # Group data rows into Over/Under pairs dynamically based on description name matches
-                df_outcomes = pd.DataFrame(outcomes)
-                if "description" in df_outcomes.columns:
-                    for player_name, group in df_outcomes.groupby("description"):
-                        if len(group) == 2:
-                            rows = group.to_dict(orient="records")
-                            p1_true, p2_true = devig_odds(rows[0]["price"], rows[1]["price"])
-                            
-                            for opt, true_p in zip(rows, [p1_true, p2_true]):
-                                proj_p = min(0.99, true_p * 1.07) # Simulated 7% prop model variance advantage
-                                dec_odds = opt["price"] / 100 if opt["price"] > 0 else 100 / abs(opt["price"])
-                                ev = (proj_p * dec_odds) - (1 - proj_p)
-                                wager, units = calculate_kelly_unit(proj_p, opt["price"], BANKROLL, KELLY_CRITERIA)
-                                
-                                if ev > 0:
-                                    market_clean_title = m_key.replace("player_", "").replace("pitcher_", "").replace("_", " ").title()
-                                    line_value = f" {opt.get('point', '')}" if 'point' in opt else ""
-                                    player_props_slate.append({
-                                        "Matchup": matchup_name,
-                                        "Selection": f"{player_name} [{market_clean_title}]: {opt['name']}{line_value}",
-                                        "Odds": opt["price"], "True Prob.": proj_p, "EV Edge": ev,
-                                        "Wager": wager, "Units": units
-                                    })
+                        if ev > 0:
+                            game_lines_slate.append({
+                                "Matchup": matchup_name, "Selection": opt["name"], "Odds": opt["price"],
+                                "True Prob.": proj_p, "EV Edge": ev, "Wager": wager, "Units": units
+                            })
 
-# --- TAB 1: RENDER DISPLAY ENGINE ---
+    # --- PASS 2: INDEPENDENT PROPS DEEP LOOK (ONLY FOR MLB & NFL) ---
+    if SPORT in ["baseball_mlb", "americanfootball_nfl"] and game_id:
+        props_to_fetch = "pitcher_strikeouts,pitcher_record_an_out,batter_hits,batter_runs,batter_rbis" if SPORT == "baseball_mlb" else "player_pass_yds,player_rush_yds,player_rec_yds"
+        event_prop_url = f"https://api.the-odds-api.com/v4/sports/{SPORT}/events/{game_id}/odds"
+        prop_params = {
+            "apiKey": API_KEY,
+            "regions": "us",
+            "markets": props_to_fetch,
+            "oddsFormat": "american",
+            "bookmakers": "fanduel"
+        }
+        
+        try:
+            prop_response = requests.get(event_prop_url, params=prop_params, timeout=10).json()
+            if isinstance(prop_response, dict) and "bookmakers" in prop_response:
+                for p_bm in prop_response.get("bookmakers", []):
+                    if p_bm.get("key") != "fanduel": continue
+                    for p_market in p_bm.get("markets", []):
+                        m_key = p_market.get("key")
+                        p_outcomes = p_market.get("outcomes", [])
+                        
+                        # Process Over/Under Pairs cleanly via structured data frames
+                        df_p = pd.DataFrame(p_outcomes)
+                        if "description" in df_p.columns:
+                            for p_name, group in df_p.groupby("description"):
+                                if len(group) == 2:
+                                    rows = group.to_dict(orient="records")
+                                    p1_t, p2_t = devig_odds(rows[0]["price"], rows[1]["price"])
+                                    
+                                    for opt, true_p in zip(rows, [p1_t, p2_t]):
+                                        proj_p = min(0.99, true_p * 1.07) 
+                                        dec_odds = opt["price"] / 100 if opt["price"] > 0 else 100 / abs(opt["price"])
+                                        ev = (proj_p * dec_odds) - (1 - proj_p)
+                                        wager, units = calculate_kelly_unit(proj_p, opt["price"], BANKROLL, KELLY_CRITERIA)
+                                        
+                                        if ev > 0:
+                                            market_clean = m_key.replace("player_", "").replace("pitcher_", "").replace("_", " ").title()
+                                            pt_val = f" {opt.get('point', '')}" if 'point' in opt else ""
+                                            player_props_slate.append({
+                                                "Matchup": matchup_name,
+                                                "Selection": f"{p_name} [{market_clean}]: {opt['name']}{pt_val}",
+                                                "Odds": opt["price"], "True Prob.": proj_p, "EV Edge": ev,
+                                                "Wager": wager, "Units": units
+                                            })
+        except Exception:
+            pass # Gracefully handle unpopulated event schedules early in the week
+
+# --- TAB 1: DISPLAY MATRICES ---
 with main_tab:
     st.markdown("### 🛠️ Interactive Sorting Filter Canvas")
     col_sort, col_order = st.columns(2)
-    with col_sort:
-        sort_metric = st.selectbox("Sort Data Metric By", ["Expected Value (EV)", "True Win Probability", "Matchup Alphabetical"])
-    with col_order:
-        sort_direction = st.selectbox("Sort Direction Order", ["Highest to Lowest", "Lowest to Highest"])
+    sort_metric = st.selectbox("Sort Data Metric By", ["Expected Value (EV)", "True Win Probability", "Matchup Alphabetical"])
+    sort_direction = st.selectbox("Sort Direction Order", ["Highest to Lowest", "Lowest to Highest"])
     
     sub_tab_games, sub_tab_props = st.tabs(["🏛️ Game Lines (Moneylines)", "👤 Specialized Player Props Matrix"])
     
@@ -178,33 +183,18 @@ with main_tab:
 
     with sub_tab_games:
         sorted_games_df = sort_extracted_df(game_lines_slate)
-        if not sorted_games_df.empty:
-            st.dataframe(sorted_games_df, use_container_width=True, hide_index=True)
-        else:
-            st.info("No high-value game line opportunities discovered currently for this sport tier.")
+        if not sorted_games_df.empty: st.dataframe(sorted_games_df, use_container_width=True, hide_index=True)
+        else: st.info("No high-value game line opportunities discovered currently for this sport tier.")
 
     with sub_tab_props:
         sorted_props_df = sort_extracted_df(player_props_slate)
-        if not sorted_props_df.empty:
-            st.dataframe(sorted_props_df, use_container_width=True, hide_index=True)
-        else:
-            st.info("No high-value specialized player prop opportunities found currently on this slate.")
+        if not sorted_props_df.empty: st.dataframe(sorted_props_df, use_container_width=True, hide_index=True)
+        else: st.info("No high-value specialized player prop opportunities found currently on this slate.")
     
     st.markdown("---")
     st.markdown("### 📝 Log a Play to the Syndicate Ledger")
     
     options_pool = {}
     if game_lines_slate:
-        for p in game_lines_slate:
-            options_pool[f"Game Line: {p['Selection']} ({p['Matchup']})"] = ("Game Line", p)
+        for p in game_lines_slate: options_pool[f"Game Line: {p['Selection']} ({p['Matchup']})"] = ("Game Line", p)
     if player_props_slate:
-        for p in player_props_slate:
-            options_pool[f"Prop: {p['Selection']} ({p['Matchup']})"] = ("Player Prop", p)
-            
-    if options_pool:
-        c1, c2, c3 = st.columns(3)
-        with c1: f_name = st.selectbox("Who is betting?", ["Myself", "Friend A", "Friend B", "Friend C"])
-        with c2: target_selection = st.selectbox("Select Target Play Slip Line", list(options_pool.keys()))
-        with c3: actual_wager = st.number_input("Wager Stake Amount ($)", min_value=1.0, value=20.0, step=5.0)
-        
-        if st.button("🚀 Push Slip to Group Ledger"):
