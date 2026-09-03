@@ -48,7 +48,7 @@ def calculate_kelly_unit(true_prob, american_odds, bankroll, fraction):
     b_odds = american_odds / 100 if american_odds > 0 else 100 / abs(american_odds)
     q_prob = 1.0 - true_prob
     kelly_fraction = (b_odds * true_prob - q_prob) / b_odds
-def calculate_kelly_unit(true_prob, american_odds, bankroll, fraction):
+    if kelly_fraction  0 else 100 / abs(opt["price"])
                         ev = (proj_p * dec_odds) - (1 - proj_p)
                         wager, units = calculate_kelly_unit(proj_p, opt["price"], BANKROLL, KELLY_CRITERIA)
                         
@@ -61,7 +61,7 @@ def calculate_kelly_unit(true_prob, american_odds, bankroll, fraction):
     # --- PASS 2: INDEPENDENT PROPS DEEP LOOK (ONLY FOR MLB & NFL) ---
     if SPORT in ["baseball_mlb", "americanfootball_nfl"] and game_id:
         props_to_fetch = "pitcher_strikeouts,pitcher_record_an_out,batter_hits,batter_runs,batter_rbis" if SPORT == "baseball_mlb" else "player_pass_yds,player_rush_yds,player_rec_yds"
-        event_prop_url = f"https://the-odds-api.com{SPORT}/events/{game_id}/odds"
+        event_prop_url = f"https://api.the-odds-api.com/v4/sports/{SPORT}/events/{game_id}/odds"
         prop_params = {
             "apiKey": API_KEY,
             "regions": "us",
@@ -143,4 +143,3 @@ with ledger_tab:
         st.dataframe(st.session_state.ledger, use_container_width=True)
     else:
         st.info("The ledger is currently clear. No committed value profiles recorded yet.")
-manually delete broken line 51
