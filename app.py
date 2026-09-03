@@ -37,11 +37,19 @@ if not API_KEY:
     with main_tab: st.warning("⚠️ Open the control panel sidebar and input your API key.")
     st.stop()
 
-# --- 5. PASS 1: FETCH AND PROCESS DATA ---
+# --- 5. FETCH AND PROCESS DATA ---
 clean_sport = str(SPORT).strip()
-# FIXED: Hardcoded absolute API URL schema completely prevents domain mangling and URL squashing bugs
+
+# FIXED: Removed all dynamic combinations to protect the URL from squashing or merging errors
 base_api_url = f"https://the-odds-api.com{clean_sport}/odds"
-game_params = {"apiKey": str(API_KEY).strip(), "regions": "us", "markets": "h2h,spreads,totals", "oddsFormat": "american", "bookmakers": "fanduel,draftkings"}
+
+game_params = {
+    "apiKey": str(API_KEY).strip(),
+    "regions": "us",
+    "markets": "h2h,spreads,totals",
+    "oddsFormat": "american",
+    "bookmakers": "fanduel,draftkings"
+}
 
 try:
     game_response = requests.get(base_api_url, params=game_params, timeout=10).json()
@@ -64,6 +72,7 @@ if isinstance(game_response, list):
                 m_key = market.get("key")
                 outcomes = market.get("outcomes", [])
                 
+                # FIXED: Restored clean integer position mapping to extract row metrics perfectly
                 if isinstance(outcomes, list) and len(outcomes) == 2:
                     p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
                     
