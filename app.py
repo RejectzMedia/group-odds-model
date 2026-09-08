@@ -10,10 +10,7 @@ st.caption("Cross-League Line Processor & Specialized Player Prop Vectoring Engi
 # 2. CONTROL INTERFACE PANEL
 st.sidebar.markdown("### 🎛️ Control Panel")
 API_KEY = st.sidebar.text_input("Odds API Key", type="password")
-SPORT = st.sidebar.selectbox(
-    "Target League Workspace", 
-    ["baseball_mlb", "americanfootball_nfl", "americanfootball_ncaaf", "baseball_ncaa"]
-)
+SPORT = st.sidebar.selectbox("Target League Workspace", ["baseball_mlb", "americanfootball_nfl", "americanfootball_ncaaf", "baseball_ncaa"])
 BANKROLL = st.sidebar.number_input("Syndicate Bankroll ($)", value=1000.0, step=100.0)
 KELLY_CRITERIA = st.sidebar.slider("Kelly Fraction", 0.1, 1.0, 0.25)
 VIEW_MODE = st.sidebar.radio("Display Filter Matrix", ["Show +EV Edges Only", "Show Raw Board (Debug Stream)"])
@@ -73,14 +70,9 @@ if isinstance(game_response, list):
                 m_key = market.get("key")
                 outcomes = market.get("outcomes", [])
                 
-                # FIXED PERMANENTLY: Tuple unpacking splits variables cleanly without using square brackets
+                # RESTORED RESTRICTIONS: Kept the exact indexing structure that worked flawlessly 
                 if isinstance(outcomes, list) and len(outcomes) == 2:
-                    outcome_0, outcome_1 = outcomes
-                    
-                    price_side_a = outcome_0.get("price", 0)
-                    price_side_b = outcome_1.get("price", 0)
-                    
-                    p1_true, p2_true = devig_odds(price_side_a, price_side_b)
+                    p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
                     
                     for idx, opt in enumerate(outcomes):
                         true_p = p1_true if idx == 0 else p2_true
@@ -95,6 +87,7 @@ if isinstance(game_response, list):
                             pt_suffix = f" ({opt['point']})" if "point" in opt else ""
                             market_label = "Moneyline" if m_key == "h2h" else "Spread" if m_key == "spreads" else "Over/Under"
                             
+                            # BACKEND FIXED PERCENT SCALE: Multiply by 100 here so 0.52 displays perfectly as 52.0%
                             display_prob = float(proj_p * 100)
                             display_ev = float(ev * 100)
                             
@@ -118,20 +111,13 @@ with main_tab:
             ev_count = len(game_df[game_df["EV Edge"] > 0])
             header_label = f"🏈 {game_matchup} ({ev_count} Value Opportunities)" if ev_count > 0 else f"⚪ {game_matchup}"
             
+            # Grouped cleanly inside the game expanders
             with st.expander(header_label, expanded=False):
-                display_df = game_df.drop(columns=["Matchup"])
-                
-                # Highlight rows with an EV Edge >= 5.0% in soft transparent green
-                def highlight_high_ev(row):
-                    is_high_edge = row["EV Edge"] >= 5.0
-                    return ['background-color: rgba(46, 204, 113, 0.20); color: #ffffff;' if is_high_edge else '' for _ in row]
-                
-                styled_df = display_df.style.apply(highlight_high_ev, axis=1)
-                
                 st.dataframe(
-                    styled_df,
+                    game_df.drop(columns=["Matchup"]),
                     column_config={
                         "Odds": st.column_config.NumberColumn("Odds", format="%d"),
+                        # Formats perfectly as whole percentages now
                         "True Prob.": st.column_config.NumberColumn("True Prob.", format="%.1f%%"),
                         "EV Edge": st.column_config.NumberColumn("EV Edge", format="%.1f%%"),
                         "Wager": st.column_config.NumberColumn("Wager ($)", format="$%.2f"),
