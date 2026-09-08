@@ -39,8 +39,6 @@ if not API_KEY:
 
 # --- 5. PASS 1: FETCH AND PROCESS DATA ---
 clean_sport = str(SPORT).strip()
-
-# FIXED: Re-inserted the vital '/v4/sports/' routing branch to align correctly with API standards
 base_api_url = f"https://api.the-odds-api.com/v4/sports/{clean_sport}/odds"
 
 game_params = {
@@ -88,6 +86,7 @@ if isinstance(game_response, list):
                             pt_suffix = f" ({opt['point']})" if "point" in opt else ""
                             market_label = "Moneyline" if m_key == "h2h" else "Spread" if m_key == "spreads" else "Over/Under"
                             
+                            # Note: Store metrics as standard decimals for correct internal sorting 
                             game_lines_slate.append({
                                 "Bookmaker": bm_key, "Matchup": matchup, "Market": market_label,
                                 "Selection": f"{opt['name']}{pt_suffix}", "Odds": int(opt["price"]),
@@ -98,19 +97,36 @@ if isinstance(game_response, list):
 with main_tab:
     st.markdown("### 🏟️ Game Line Value Fields")
     if game_lines_slate:
-        df = pd.DataFrame(game_lines_slate).sort_values(by="EV Edge", ascending=False)
+        master_df = pd.DataFrame(game_lines_slate)
         
-        st.dataframe(
-            df,
-            column_config={
-                "Odds": st.column_config.NumberColumn("Odds", format="%d"),
-                "True Prob.": st.column_config.NumberColumn("True Prob.", format="%.2f"),
-                "EV Edge": st.column_config.NumberColumn("EV Edge", format="%.2f"),
-                "Wager": st.column_config.NumberColumn("Wager ($)", format="$%.2f"),
-                "Units": st.column_config.NumberColumn("Units", format="%.2f")
-            },
-            use_container_width=True,
-            hide_index=True
-        )
+        # Get a unique list of matchups for that day's slate to build out individual elements
+        unique_games = master_df["Matchup"].unique()
+        
+        for game_matchup in unique_games:
+            # Filter the master dataframe down to just the active rows for this specific game
+            game_df = master_df[master_df["Matchup"] == game_matchup].copy()
+            
+            # Sort individual board segments by highest EV Edge
+            game_df = game_df.sort_values(by="EV Edge", ascending=False)
+            
+            # Count how many +EV lines are active inside this game to display a preview header metric
+            ev_count = len(game_df[game_df["EV Edge"] > 0])
+            header_label = f"🏈 {game_matchup} ({ev_count} Value Opportunities)" if ev_count > 0 else f"⚪ {game_matchup}"
+            
+            # Create an interactive dropdown module for each match
+            with st.expander(header_label, expanded=False):
+                st.dataframe(
+                    game_df.drop(columns=["Matchup"]), # Hide redundant matchup text inside its own expander
+                    column_config={
+                        "Odds": st.column_config.NumberColumn("Odds", format="%d"),
+                        # Convert decimals cleanly into clear UI percentages using Streamlit's native formatting engine
+                        "True Prob.": st.column_config.NumberColumn("True Prob.", format="%.1f%%"),
+                        "EV Edge": st.column_config.NumberColumn("EV Edge", format="%.1f%%"),
+                        "Wager": st.column_config.NumberColumn("Wager ($)", format="$%.2f"),
+                        "Units": st.column_config.NumberColumn("Units", format="%.2f")
+                    },
+                    use_container_width=True,
+                    hide_index=True
+                )
     else:
         st.info("No active fields found matching your filter rules.")
