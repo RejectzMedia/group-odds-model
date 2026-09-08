@@ -42,8 +42,6 @@ if not API_KEY:
 
 # --- 5. PASS 1: FETCH AND PROCESS DATA ---
 clean_sport = str(SPORT).strip()
-
-# VERIFIED URL STRING: Added the forward slash explicitly to fix the connection dropout bug
 base_api_url = f"https://the-odds-api.com{clean_sport}/odds"
 
 game_params = {
@@ -75,9 +73,14 @@ if isinstance(game_response, list):
                 m_key = market.get("key")
                 outcomes = market.get("outcomes", [])
                 
-                # VERIFIED INDEXING: pull option [0] and option [1] explicitly to compare opposite sides correctly
+                # FIXED PERMANENTLY: Tuple unpacking splits variables cleanly without using square brackets
                 if isinstance(outcomes, list) and len(outcomes) == 2:
-                    p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
+                    outcome_0, outcome_1 = outcomes
+                    
+                    price_side_a = outcome_0.get("price", 0)
+                    price_side_b = outcome_1.get("price", 0)
+                    
+                    p1_true, p2_true = devig_odds(price_side_a, price_side_b)
                     
                     for idx, opt in enumerate(outcomes):
                         true_p = p1_true if idx == 0 else p2_true
@@ -92,7 +95,6 @@ if isinstance(game_response, list):
                             pt_suffix = f" ({opt['point']})" if "point" in opt else ""
                             market_label = "Moneyline" if m_key == "h2h" else "Spread" if m_key == "spreads" else "Over/Under"
                             
-                            # VERIFIED DATA SCALING: Scales float decimals to display precisely inside percentage configs
                             display_prob = float(proj_p * 100)
                             display_ev = float(ev * 100)
                             
@@ -116,11 +118,10 @@ with main_tab:
             ev_count = len(game_df[game_df["EV Edge"] > 0])
             header_label = f"🏈 {game_matchup} ({ev_count} Value Opportunities)" if ev_count > 0 else f"⚪ {game_matchup}"
             
-            # Formats game items cleanly into isolated expander grids
             with st.expander(header_label, expanded=False):
                 display_df = game_df.drop(columns=["Matchup"])
                 
-                # Row styling: Highlights rows with an EV Edge >= 5% in soft transparent green
+                # Highlight rows with an EV Edge >= 5.0% in soft transparent green
                 def highlight_high_ev(row):
                     is_high_edge = row["EV Edge"] >= 5.0
                     return ['background-color: rgba(46, 204, 113, 0.20); color: #ffffff;' if is_high_edge else '' for _ in row]
