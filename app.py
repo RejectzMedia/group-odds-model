@@ -40,18 +40,14 @@ if not API_KEY:
     with main_tab: st.warning("⚠️ Open the control panel sidebar and input your API key.")
     st.stop()
 
-# --- 5. PASS 1: FETCH AND PROCESS DATA ---
+# --- 5. PASS 1: FETCH MAIN LINE ODDS & EVENT IDS ---
 clean_sport = str(SPORT).strip()
-
-# Target Markets updated to fetch both standard game lines AND player prop boards seamlessly
-market_query_string = "h2h,spreads,totals,batter_home_runs,player_pass_tds,player_rush_yds,player_pass_yds"
-
 base_api_url = f"https://the-odds-api.com{clean_sport}/odds"
 
 game_params = {
     "apiKey": str(API_KEY).strip(),
     "regions": "us",
-    "markets": market_query_string,
+    "markets": "h2h,spreads,totals",
     "oddsFormat": "american",
     "bookmakers": "fanduel,draftkings"
 }
@@ -59,7 +55,7 @@ game_params = {
 try:
     game_response = requests.get(base_api_url, params=game_params, timeout=10).json()
 except Exception as e:
-    st.error("📡 API Connection Dropout: " + str(e))
+    st.error("📡 API Connection Dropout on Main Lines: " + str(e))
     st.stop()
 
 if isinstance(game_response, dict) and "msg" in game_response:
@@ -68,54 +64,73 @@ if isinstance(game_response, dict) and "msg" in game_response:
 
 game_lines_slate = []
 
-# Map cryptic API market keys to clean, readable workspace headings
+# Mapping dictionary for clean market display
 MARKET_MAPPER = {
     "h2h": "Moneyline",
     "spreads": "Spread",
     "totals": "Over/Under",
-    "batter_home_runs": "Player Prop: Batter HR",
-    "player_pass_tds": "Player Prop: Passing TDs",
-    "player_rush_yds": "Player Prop: Rushing Yds",
-    "player_pass_yds": "Player Prop: Passing Yds"
+    "batter_home_runs": "Prop: Batter HR",
+    "player_pass_tds": "Prop: Passing TDs",
+    "player_rush_yds": "Prop: Rushing Yds",
+    "player_pass_yds": "Prop: Passing Yds"
 }
 
+# Processes list data cleanly
+def process_market_outcomes(outcomes, m_key, matchup, bm_key):
+    if isinstance(outcomes, list) and len(outcomes) == 2:
+        p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
+        
+        for idx, opt in enumerate(outcomes):
+            true_p = p1_true if idx == 0 else p2_true
+            mult = 1.06 if m_key == "h2h" else 1.05
+            proj_p = min(0.99, true_p * mult)
+            
+            dec_odds = opt["price"] / 100 if opt["price"] > 0 else 100 / abs(opt["price"])
+            ev = (proj_p * dec_odds) - (1 - proj_p)
+            wager, units = calculate_kelly_unit(proj_p, opt["price"], BANKROLL, KELLY_CRITERIA)
+            
+            if VIEW_MODE == "Show Raw Board (Debug Stream)" or ev > 0:
+                pt_suffix = f" ({opt['point']})" if "point" in opt else ""
+                market_label = MARKET_MAPPER.get(m_key, m_key.replace("_", " ").title())
+                
+                game_lines_slate.append({
+                    "Bookmaker": bm_key, "Matchup": matchup, "Market": market_label,
+                    "Selection": f"{opt['name']}{pt_suffix}", "Odds": int(opt["price"]),
+                    "True Prob.": float(proj_p * 100), "EV Edge": float(ev * 100), 
+                    "Wager": float(wager), "Units": float(units)
+                })
+
+# Loop main lines
 if isinstance(game_response, list):
     for game in game_response:
+        game_id = game.get("id")
         matchup = f"{game.get('away_team', 'Away')} @ {game.get('home_team', 'Home')}"
+        
+        # Parse Main Game Lines
         for bm in game.get("bookmakers", []):
             bm_key = bm.get("key", "").upper()
             for market in bm.get("markets", []):
-                m_key = market.get("key")
-                outcomes = market.get("outcomes", [])
+                process_market_outcomes(market.get("outcomes", []), market.get("key"), matchup, bm_key)
                 
-                # Check for standard 2-sided markets and props
-                if isinstance(outcomes, list) and len(outcomes) == 2:
-                    p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
-                    
-                    for idx, opt in enumerate(outcomes):
-                        true_p = p1_true if idx == 0 else p2_true
-                        
-                        # Apply specialized multi-bookmaker margin assumptions
-                        mult = 1.06 if m_key == "h2h" else 1.05
-                        proj_p = min(0.99, true_p * mult)
-                        
-                        dec_odds = opt["price"] / 100 if opt["price"] > 0 else 100 / abs(opt["price"])
-                        ev = (proj_p * dec_odds) - (1 - proj_p)
-                        wager, units = calculate_kelly_unit(proj_p, opt["price"], BANKROLL, KELLY_CRITERIA)
-                        
-                        if VIEW_MODE == "Show Raw Board (Debug Stream)" or ev > 0:
-                            pt_suffix = f" ({opt['point']})" if "point" in opt else ""
-                            market_label = MARKET_MAPPER.get(m_key, m_key.replace("_", " ").title())
-                            
-                            # Scale decimals up by 100 to display properly in the UI tables
-                            display_prob = float(proj_p * 100)
-                            display_ev = float(ev * 100)
-                            
-                            game_lines_slate.append({
-                                "Bookmaker": bm_key, "Matchup": matchup, "Market": market_label,
-                                "Selection": f"{opt['name']}{pt_suffix}", "Odds": int(opt["price"]),
-                                "True Prob.": display_prob, "EV Edge": display_ev, "Wager": float(wager), "Units": float(units)
-                            })
+        # --- PASS 2: SUB-LOOP SUB-COLLECTOR FOR DEDICATED PLAYER PROPS ---
+        if game_id:
+            prop_url = f"https://the-odds-api.com{clean_sport}/events/{game_id}/odds"
+            prop_params = {
+                "apiKey": str(API_KEY).strip(),
+                "regions": "us",
+                "markets": "batter_home_runs,player_pass_tds,player_rush_yds,player_pass_yds",
+                "oddsFormat": "american",
+                "bookmakers": "fanduel,draftkings"
+            }
+            try:
+                prop_response = requests.get(prop_url, params=prop_params, timeout=10).json()
+                if isinstance(prop_response, dict) and "bookmakers" in prop_response:
+                    for p_bm in prop_response.get("bookmakers", []):
+                        p_bm_key = p_bm.get("key", "").upper()
+                        for p_market in p_bm.get("markets", []):
+                            process_market_outcomes(p_market.get("outcomes", []), p_market.get("key"), matchup, p_bm_key)
+            except Exception:
+                pass # Gracefully skip if a specific game lacks prop lines to keep app running cleanly
 
 # --- 6. UI RENDER ---
 with main_tab:
@@ -132,14 +147,12 @@ with main_tab:
             header_label = f"🏈 {game_matchup} ({ev_count} Value Opportunities)" if ev_count > 0 else f"⚪ {game_matchup}"
             
             with st.expander(header_label, expanded=False):
-                # Clean up the dataset display within the dropdown container
                 display_df = game_df.drop(columns=["Matchup"])
                 
-                # Dynamic High EV Edge Highlight Styling Pipeline
+                # Highlight rows with EV Edge >= 5.0% green
                 def highlight_high_ev(row):
-                    # Flag lines containing an EV edge over 5.0% with a noticeable light green background tint
                     is_high_edge = row["EV Edge"] >= 5.0
-                    return ['background-color: rgba(46, 204, 113, 0.25); color: #ffffff;' if is_high_edge else '' for _ in row]
+                    return ['background-color: rgba(46, 204, 113, 0.20); color: #ffffff;' if is_high_edge else '' for _ in row]
                 
                 styled_df = display_df.style.apply(highlight_high_ev, axis=1)
                 
