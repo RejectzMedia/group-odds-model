@@ -17,13 +17,23 @@ VIEW_MODE = st.sidebar.radio("Display Filter Matrix", ["Show +EV Edges Only", "S
 
 # 3. CORE MATHEMATICAL CALCULATION ENGINES
 def devig_odds(american_over, american_under):
-    implied_o = 100 / (american_over + 100) if american_over > 0 else abs(american_over) / (abs(american_over) + 100)
-    implied_u = 100 / (american_under + 100) if american_under > 0 else abs(american_under) / (abs(american_under) + 100)
+    implied_o = 100 / (american_over + 100) if american_over > 0 else abs(american_over) if american_over != 0 else 0
+    implied_o = implied_o / (implied_o + 100) if american_over <= 0 and american_over != 0 else implied_o
+    
+    implied_u = 100 / (american_under + 100) if american_under > 0 else abs(american_under) if american_under != 0 else 0
+    implied_u = implied_u / (implied_u + 100) if american_under <= 0 and american_under != 0 else implied_u
+    
+    # Exact calculation fallback to ensure no division by zero crashes
+    implied_o = 100 / (american_over + 100) if american_over > 0 else abs(american_over) / (abs(american_over) + 100) if american_over != 0 else 0.5
+    implied_u = 100 / (american_under + 100) if american_under > 0 else abs(american_under) / (abs(american_under) + 100) if american_under != 0 else 0.5
+    
     total_implied = implied_o + implied_u
+    if total_implied == 0:
+        return 0.5, 0.5
     return implied_o / total_implied, implied_u / total_implied
 
 def calculate_kelly_unit(true_prob, american_odds, bankroll, fraction):
-    b_odds = american_odds / 100 if american_odds > 0 else 100 / abs(american_odds)
+    b_odds = american_odds / 100 if american_odds > 0 else 100 / abs(american_odds) if american_odds != 0 else 1.0
     q_prob = 1.0 - true_prob
     kelly_fraction = (b_odds * true_prob - q_prob) / b_odds
     if kelly_fraction <= 0: return 0.0, 0.0
@@ -39,9 +49,7 @@ if not API_KEY:
 
 # --- 5. PASS 1: FETCH AND PROCESS DATA ---
 clean_sport = str(SPORT).strip()
-
-# RESTORED: The original, working API url engine that runs without dropout failures
-base_api_url = f"https://api.the-odds-api.com/v4/sports/{clean_sport}/odds"
+base_api_url = f"https://the-odds-api.com{clean_sport}/odds"
 
 game_params = {
     "apiKey": str(API_KEY).strip(),
@@ -72,16 +80,23 @@ if isinstance(game_response, list):
                 m_key = market.get("key")
                 outcomes = market.get("outcomes", [])
                 
-                # RESTORED: The original, functional indexing syntax that parses opposing books correctly
+                # FIXED PERMANENTLY: Safe variable unpacking extraction loop
                 if isinstance(outcomes, list) and len(outcomes) == 2:
-                    p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
+                    prices = []
+                    for o in outcomes:
+                        prices.append(o.get("price", 0))
+                    
+                    price_side_a = prices[0]
+                    price_side_b = prices[1]
+                    
+                    p1_true, p2_true = devig_odds(price_side_a, price_side_b)
                     
                     for idx, opt in enumerate(outcomes):
                         true_p = p1_true if idx == 0 else p2_true
                         mult = 1.06 if m_key == "h2h" else 1.05
                         proj_p = min(0.99, true_p * mult)
                         
-                        dec_odds = opt["price"] / 100 if opt["price"] > 0 else 100 / abs(opt["price"])
+                        dec_odds = opt["price"] / 100 if opt["price"] > 0 else 100 / abs(opt["price"]) if opt["price"] != 0 else 1.0
                         ev = (proj_p * dec_odds) - (1 - proj_p)
                         wager, units = calculate_kelly_unit(proj_p, opt["price"], BANKROLL, KELLY_CRITERIA)
                         
@@ -89,11 +104,14 @@ if isinstance(game_response, list):
                             pt_suffix = f" ({opt['point']})" if "point" in opt else ""
                             market_label = "Moneyline" if m_key == "h2h" else "Spread" if m_key == "spreads" else "Over/Under"
                             
-                            # Keep data as standard fractions to preserve background math alignment
+                            # SCALE FIX: Converted raw decimal ratios to clear visual whole percentages
+                            display_prob = float(proj_p * 100)
+                            display_ev = float(ev * 100)
+                            
                             game_lines_slate.append({
                                 "Bookmaker": bm_key, "Matchup": matchup, "Market": market_label,
                                 "Selection": f"{opt['name']}{pt_suffix}", "Odds": int(opt["price"]),
-                                "True Prob.": float(proj_p), "EV Edge": float(ev), "Wager": float(wager), "Units": float(units)
+                                "True Prob.": display_prob, "EV Edge": display_ev, "Wager": float(wager), "Units": float(units)
                             })
 
 # --- 6. UI RENDER ---
@@ -101,8 +119,6 @@ with main_tab:
     st.markdown("### 🏟️ Game Line Value Fields")
     if game_lines_slate:
         master_df = pd.DataFrame(game_lines_slate)
-        
-        # Pull your list of unique daily matchup slates cleanly
         unique_games = master_df["Matchup"].unique()
         
         for game_matchup in unique_games:
@@ -112,13 +128,11 @@ with main_tab:
             ev_count = len(game_df[game_df["EV Edge"] > 0])
             header_label = f"🏈 {game_matchup} ({ev_count} Value Opportunities)" if ev_count > 0 else f"⚪ {game_matchup}"
             
-            # Formats each individual slate inside clean interactive game expanders
             with st.expander(header_label, expanded=False):
                 st.dataframe(
                     game_df.drop(columns=["Matchup"]),
                     column_config={
                         "Odds": st.column_config.NumberColumn("Odds", format="%d"),
-                        # FIXED: Used Streamlit's native format mapper to shift decimals to percent visuals seamlessly
                         "True Prob.": st.column_config.NumberColumn("True Prob.", format="%.1f%%"),
                         "EV Edge": st.column_config.NumberColumn("EV Edge", format="%.1f%%"),
                         "Wager": st.column_config.NumberColumn("Wager ($)", format="$%.2f"),
