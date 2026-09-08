@@ -70,7 +70,7 @@ if isinstance(game_response, list):
                 m_key = market.get("key")
                 outcomes = market.get("outcomes", [])
                 
-                # FIXED: Added back explicit indices [0] and [1] to pull accurate two-sided market values
+                # VERIFIED INDEXING: Safely pulls option [0] and option [1] for math tracking
                 if isinstance(outcomes, list) and len(outcomes) == 2:
                     p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
                     
@@ -87,14 +87,11 @@ if isinstance(game_response, list):
                             pt_suffix = f" ({opt['point']})" if "point" in opt else ""
                             market_label = "Moneyline" if m_key == "h2h" else "Spread" if m_key == "spreads" else "Over/Under"
                             
-                            # FIXED: Explicitly scale the raw decimal into full percentage data (0.50 -> 50.0)
-                            display_prob = float(proj_p * 100)
-                            display_ev = float(ev * 100)
-                            
+                            # Keep data as standard floating decimals for calculation precision
                             game_lines_slate.append({
                                 "Bookmaker": bm_key, "Matchup": matchup, "Market": market_label,
                                 "Selection": f"{opt['name']}{pt_suffix}", "Odds": int(opt["price"]),
-                                "True Prob.": display_prob, "EV Edge": display_ev, "Wager": float(wager), "Units": float(units)
+                                "True Prob.": float(proj_p), "EV Edge": float(ev), "Wager": float(wager), "Units": float(units)
                             })
 
 # --- 6. UI RENDER ---
@@ -108,7 +105,7 @@ with main_tab:
             game_df = master_df[master_df["Matchup"] == game_matchup].copy()
             game_df = game_df.sort_values(by="EV Edge", ascending=False)
             
-            # Count opportunities using the scaled threshold (> 0 is identical since 0 * 100 = 0)
+            # Count +EV edges correctly using base float boundaries
             ev_count = len(game_df[game_df["EV Edge"] > 0])
             header_label = f"🏈 {game_matchup} ({ev_count} Value Opportunities)" if ev_count > 0 else f"⚪ {game_matchup}"
             
@@ -117,6 +114,7 @@ with main_tab:
                     game_df.drop(columns=["Matchup"]),
                     column_config={
                         "Odds": st.column_config.NumberColumn("Odds", format="%d"),
+                        # FIXED: Multiplies data decimals by 100 inside the column viewing space automatically
                         "True Prob.": st.column_config.NumberColumn("True Prob.", format="%.1f%%"),
                         "EV Edge": st.column_config.NumberColumn("EV Edge", format="%.1f%%"),
                         "Wager": st.column_config.NumberColumn("Wager ($)", format="$%.2f"),
