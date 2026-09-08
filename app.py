@@ -70,7 +70,7 @@ if isinstance(game_response, list):
                 m_key = market.get("key")
                 outcomes = market.get("outcomes", [])
                 
-                # Fixed a minor logic issue: index outcomes[0] vs outcomes[1] safely
+                # RESTORED FIX: Safely map index 0 (Over/Home) and index 1 (Under/Away) to calculations
                 if isinstance(outcomes, list) and len(outcomes) == 2:
                     p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
                     
@@ -87,7 +87,7 @@ if isinstance(game_response, list):
                             pt_suffix = f" ({opt['point']})" if "point" in opt else ""
                             market_label = "Moneyline" if m_key == "h2h" else "Spread" if m_key == "spreads" else "Over/Under"
                             
-                            # CRITICAL FIX: Multiply raw decimals by 100 so they display perfectly as full percents (e.g., 0.534 -> 53.4)
+                            # Scale decimals into accurate display-ready percentages (e.g. 0.525 -> 52.5)
                             display_prob = float(proj_p * 100)
                             display_ev = float(ev * 100)
                             
@@ -108,7 +108,6 @@ with main_tab:
             game_df = master_df[master_df["Matchup"] == game_matchup].copy()
             game_df = game_df.sort_values(by="EV Edge", ascending=False)
             
-            # Count positive EV edges using the updated scale (> 0 remains unchanged since 0 * 100 = 0)
             ev_count = len(game_df[game_df["EV Edge"] > 0])
             header_label = f"🏈 {game_matchup} ({ev_count} Value Opportunities)" if ev_count > 0 else f"⚪ {game_matchup}"
             
@@ -117,7 +116,6 @@ with main_tab:
                     game_df.drop(columns=["Matchup"]),
                     column_config={
                         "Odds": st.column_config.NumberColumn("Odds", format="%d"),
-                        # Format appends the '%' suffix directly onto the calculated values
                         "True Prob.": st.column_config.NumberColumn("True Prob.", format="%.1f%%"),
                         "EV Edge": st.column_config.NumberColumn("EV Edge", format="%.1f%%"),
                         "Wager": st.column_config.NumberColumn("Wager ($)", format="$%.2f"),
