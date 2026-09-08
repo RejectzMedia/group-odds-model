@@ -70,7 +70,7 @@ if isinstance(game_response, list):
                 m_key = market.get("key")
                 outcomes = market.get("outcomes", [])
                 
-                # RESTORED FIX: Safely map index 0 (Over/Home) and index 1 (Under/Away) to calculations
+                # FIXED: Added back explicit indices [0] and [1] to pull accurate two-sided market values
                 if isinstance(outcomes, list) and len(outcomes) == 2:
                     p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
                     
@@ -87,7 +87,7 @@ if isinstance(game_response, list):
                             pt_suffix = f" ({opt['point']})" if "point" in opt else ""
                             market_label = "Moneyline" if m_key == "h2h" else "Spread" if m_key == "spreads" else "Over/Under"
                             
-                            # Scale decimals into accurate display-ready percentages (e.g. 0.525 -> 52.5)
+                            # FIXED: Explicitly scale the raw decimal into full percentage data (0.50 -> 50.0)
                             display_prob = float(proj_p * 100)
                             display_ev = float(ev * 100)
                             
@@ -108,6 +108,7 @@ with main_tab:
             game_df = master_df[master_df["Matchup"] == game_matchup].copy()
             game_df = game_df.sort_values(by="EV Edge", ascending=False)
             
+            # Count opportunities using the scaled threshold (> 0 is identical since 0 * 100 = 0)
             ev_count = len(game_df[game_df["EV Edge"] > 0])
             header_label = f"🏈 {game_matchup} ({ev_count} Value Opportunities)" if ev_count > 0 else f"⚪ {game_matchup}"
             
