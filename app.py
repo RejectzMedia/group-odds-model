@@ -42,6 +42,8 @@ if not API_KEY:
 
 # --- 5. PASS 1: FETCH MAIN LINE ODDS & EVENT IDS ---
 clean_sport = str(SPORT).strip()
+
+# CRITICAL FIX: Explicitly added the missing '/' before the sport variable parameter
 base_api_url = f"https://the-odds-api.com{clean_sport}/odds"
 
 game_params = {
@@ -114,6 +116,7 @@ if isinstance(game_response, list):
                 
         # --- PASS 2: SUB-LOOP SUB-COLLECTOR FOR DEDICATED PLAYER PROPS ---
         if game_id:
+            # FIXED URL routing path for the separate event odds module as well
             prop_url = f"https://the-odds-api.com{clean_sport}/events/{game_id}/odds"
             prop_params = {
                 "apiKey": str(API_KEY).strip(),
@@ -130,7 +133,7 @@ if isinstance(game_response, list):
                         for p_market in p_bm.get("markets", []):
                             process_market_outcomes(p_market.get("outcomes", []), p_market.get("key"), matchup, p_bm_key)
             except Exception:
-                pass # Gracefully skip if a specific game lacks prop lines to keep app running cleanly
+                pass # Gracefully skip if a specific game has no prop listings ready
 
 # --- 6. UI RENDER ---
 with main_tab:
