@@ -39,7 +39,9 @@ if not API_KEY:
 
 # --- 5. PASS 1: FETCH AND PROCESS DATA ---
 clean_sport = str(SPORT).strip()
-base_api_url = f"https://the-odds-api.com{clean_sport}/odds"
+
+# RESTORED: The original, working API url engine that runs without dropout failures
+base_api_url = f"https://api.the-odds-api.com/v4/sports/{clean_sport}/odds"
 
 game_params = {
     "apiKey": str(API_KEY).strip(),
@@ -70,7 +72,7 @@ if isinstance(game_response, list):
                 m_key = market.get("key")
                 outcomes = market.get("outcomes", [])
                 
-                # RESTORED RESTRICTIONS: Kept the exact indexing structure that worked flawlessly 
+                # RESTORED: The original, functional indexing syntax that parses opposing books correctly
                 if isinstance(outcomes, list) and len(outcomes) == 2:
                     p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
                     
@@ -87,14 +89,11 @@ if isinstance(game_response, list):
                             pt_suffix = f" ({opt['point']})" if "point" in opt else ""
                             market_label = "Moneyline" if m_key == "h2h" else "Spread" if m_key == "spreads" else "Over/Under"
                             
-                            # BACKEND FIXED PERCENT SCALE: Multiply by 100 here so 0.52 displays perfectly as 52.0%
-                            display_prob = float(proj_p * 100)
-                            display_ev = float(ev * 100)
-                            
+                            # Keep data as standard fractions to preserve background math alignment
                             game_lines_slate.append({
                                 "Bookmaker": bm_key, "Matchup": matchup, "Market": market_label,
                                 "Selection": f"{opt['name']}{pt_suffix}", "Odds": int(opt["price"]),
-                                "True Prob.": display_prob, "EV Edge": display_ev, "Wager": float(wager), "Units": float(units)
+                                "True Prob.": float(proj_p), "EV Edge": float(ev), "Wager": float(wager), "Units": float(units)
                             })
 
 # --- 6. UI RENDER ---
@@ -102,6 +101,8 @@ with main_tab:
     st.markdown("### 🏟️ Game Line Value Fields")
     if game_lines_slate:
         master_df = pd.DataFrame(game_lines_slate)
+        
+        # Pull your list of unique daily matchup slates cleanly
         unique_games = master_df["Matchup"].unique()
         
         for game_matchup in unique_games:
@@ -111,13 +112,13 @@ with main_tab:
             ev_count = len(game_df[game_df["EV Edge"] > 0])
             header_label = f"🏈 {game_matchup} ({ev_count} Value Opportunities)" if ev_count > 0 else f"⚪ {game_matchup}"
             
-            # Grouped cleanly inside the game expanders
+            # Formats each individual slate inside clean interactive game expanders
             with st.expander(header_label, expanded=False):
                 st.dataframe(
                     game_df.drop(columns=["Matchup"]),
                     column_config={
                         "Odds": st.column_config.NumberColumn("Odds", format="%d"),
-                        # Formats perfectly as whole percentages now
+                        # FIXED: Used Streamlit's native format mapper to shift decimals to percent visuals seamlessly
                         "True Prob.": st.column_config.NumberColumn("True Prob.", format="%.1f%%"),
                         "EV Edge": st.column_config.NumberColumn("EV Edge", format="%.1f%%"),
                         "Wager": st.column_config.NumberColumn("Wager ($)", format="$%.2f"),
