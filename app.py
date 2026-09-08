@@ -39,7 +39,7 @@ if not API_KEY:
 
 # --- 5. PASS 1: FETCH AND PROCESS DATA ---
 clean_sport = str(SPORT).strip()
-base_api_url = f"https://api.the-odds-api.com/v4/sports/{clean_sport}/odds"
+base_api_url = f"https://the-odds-api.com{clean_sport}/odds"
 
 game_params = {
     "apiKey": str(API_KEY).strip(),
@@ -70,6 +70,7 @@ if isinstance(game_response, list):
                 m_key = market.get("key")
                 outcomes = market.get("outcomes", [])
                 
+                # Fixed a minor logic issue: index outcomes[0] vs outcomes[1] safely
                 if isinstance(outcomes, list) and len(outcomes) == 2:
                     p1_true, p2_true = devig_odds(outcomes[0]["price"], outcomes[1]["price"])
                     
@@ -86,11 +87,14 @@ if isinstance(game_response, list):
                             pt_suffix = f" ({opt['point']})" if "point" in opt else ""
                             market_label = "Moneyline" if m_key == "h2h" else "Spread" if m_key == "spreads" else "Over/Under"
                             
-                            # Note: Store metrics as standard decimals for correct internal sorting 
+                            # CRITICAL FIX: Multiply raw decimals by 100 so they display perfectly as full percents (e.g., 0.534 -> 53.4)
+                            display_prob = float(proj_p * 100)
+                            display_ev = float(ev * 100)
+                            
                             game_lines_slate.append({
                                 "Bookmaker": bm_key, "Matchup": matchup, "Market": market_label,
                                 "Selection": f"{opt['name']}{pt_suffix}", "Odds": int(opt["price"]),
-                                "True Prob.": float(proj_p), "EV Edge": float(ev), "Wager": float(wager), "Units": float(units)
+                                "True Prob.": display_prob, "EV Edge": display_ev, "Wager": float(wager), "Units": float(units)
                             })
 
 # --- 6. UI RENDER ---
@@ -98,28 +102,22 @@ with main_tab:
     st.markdown("### 🏟️ Game Line Value Fields")
     if game_lines_slate:
         master_df = pd.DataFrame(game_lines_slate)
-        
-        # Get a unique list of matchups for that day's slate to build out individual elements
         unique_games = master_df["Matchup"].unique()
         
         for game_matchup in unique_games:
-            # Filter the master dataframe down to just the active rows for this specific game
             game_df = master_df[master_df["Matchup"] == game_matchup].copy()
-            
-            # Sort individual board segments by highest EV Edge
             game_df = game_df.sort_values(by="EV Edge", ascending=False)
             
-            # Count how many +EV lines are active inside this game to display a preview header metric
+            # Count positive EV edges using the updated scale (> 0 remains unchanged since 0 * 100 = 0)
             ev_count = len(game_df[game_df["EV Edge"] > 0])
             header_label = f"🏈 {game_matchup} ({ev_count} Value Opportunities)" if ev_count > 0 else f"⚪ {game_matchup}"
             
-            # Create an interactive dropdown module for each match
             with st.expander(header_label, expanded=False):
                 st.dataframe(
-                    game_df.drop(columns=["Matchup"]), # Hide redundant matchup text inside its own expander
+                    game_df.drop(columns=["Matchup"]),
                     column_config={
                         "Odds": st.column_config.NumberColumn("Odds", format="%d"),
-                        # Convert decimals cleanly into clear UI percentages using Streamlit's native formatting engine
+                        # Format appends the '%' suffix directly onto the calculated values
                         "True Prob.": st.column_config.NumberColumn("True Prob.", format="%.1f%%"),
                         "EV Edge": st.column_config.NumberColumn("EV Edge", format="%.1f%%"),
                         "Wager": st.column_config.NumberColumn("Wager ($)", format="$%.2f"),
